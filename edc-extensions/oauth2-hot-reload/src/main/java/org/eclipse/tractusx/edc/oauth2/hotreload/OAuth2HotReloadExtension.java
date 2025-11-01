@@ -84,21 +84,55 @@ public class OAuth2HotReloadExtension implements ServiceExtension {
      * (Note: This requires EDC to be restarted to pick up changes, so less useful)
      */
     private void monitorConfigViaContext(ServiceExtensionContext context) {
-        String jwksUrl = context.getSetting("web.http.management.auth.dac.key.url", null);
-        String audience = context.getSetting("web.http.management.auth.dac.audience", null);
+        // Try multiple possible property names for compatibility
+        String jwksUrl = getJwksUrlFromContext(context);
+        String audience = getAudienceFromContext(context);
         
-        if (jwksUrl != null) {
+        if (jwksUrl != null && !jwksUrl.isEmpty()) {
             lastJwksUrl = jwksUrl;
             lastAudience = audience;
             monitor.info("Initial OAuth2 config loaded from context - JWKS URL: " + jwksUrl);
             // Note: This won't detect changes without restart
         } else {
-            monitor.warning("OAuth2 config not found. Make sure 'web.http.management.auth.dac.key.url' is set.");
+            monitor.warning("OAuth2 config not found. Make sure OAuth2 JWKS URL property is set.");
         }
     }
 
     /**
+     * Gets JWKS URL from context, trying multiple property name variants
+     */
+    private String getJwksUrlFromContext(ServiceExtensionContext context) {
+        // Try the delegated auth property first (correct one for Management API)
+        String url = context.getSetting("web.http.management.auth.dac.key.url", null);
+        if (url != null && !url.isEmpty()) {
+            return url;
+        }
+        // Try alternative property names
+        url = context.getSetting("edc.oauth.jwk.url", null);
+        if (url != null && !url.isEmpty()) {
+            return url;
+        }
+        return null;
+    }
+
+    /**
+     * Gets audience from context, trying multiple property name variants
+     */
+    private String getAudienceFromContext(ServiceExtensionContext context) {
+        String audience = context.getSetting("web.http.management.auth.dac.audience", null);
+        if (audience != null && !audience.isEmpty()) {
+            return audience;
+        }
+        audience = context.getSetting("edc.oauth.audience", null);
+        if (audience != null && !audience.isEmpty()) {
+            return audience;
+        }
+        return null;
+    }
+
+    /**
      * Loads OAuth2 config from the properties file
+     * Supports multiple property name variants for compatibility
      */
     private void loadConfigFromFile() {
         try {
@@ -113,16 +147,28 @@ public class OAuth2HotReloadExtension implements ServiceExtension {
                 props.load(fis);
             }
 
+            // Try multiple property name variants (in order of preference)
             String jwksUrl = props.getProperty("web.http.management.auth.dac.key.url");
+            if (jwksUrl == null || jwksUrl.trim().isEmpty()) {
+                // Fallback to alternative property name
+                jwksUrl = props.getProperty("edc.oauth.jwk.url");
+            }
+            
             String audience = props.getProperty("web.http.management.auth.dac.audience");
+            if (audience == null || audience.trim().isEmpty()) {
+                // Fallback to alternative property name
+                audience = props.getProperty("edc.oauth.audience");
+            }
 
-            if (jwksUrl != null) {
-                lastJwksUrl = jwksUrl;
-                lastAudience = audience;
+            if (jwksUrl != null && !jwksUrl.trim().isEmpty()) {
+                lastJwksUrl = jwksUrl.trim();
+                lastAudience = (audience != null && !audience.trim().isEmpty()) ? audience.trim() : null;
                 lastConfigFileModified = configFile.lastModified();
-                monitor.info("OAuth2 config loaded - JWKS URL: " + jwksUrl + ", Audience: " + audience);
+                monitor.info("OAuth2 config loaded - JWKS URL: " + lastJwksUrl + 
+                           (lastAudience != null ? ", Audience: " + lastAudience : ""));
             } else {
-                monitor.warning("OAuth2 config property 'web.http.management.auth.dac.key.url' not found in config file");
+                monitor.warning("OAuth2 config property not found in config file. " +
+                        "Tried: 'web.http.management.auth.dac.key.url' and 'edc.oauth.jwk.url'");
             }
 
         } catch (IOException e) {
@@ -147,12 +193,18 @@ public class OAuth2HotReloadExtension implements ServiceExtension {
                 String previousJwksUrl = lastJwksUrl;
                 loadConfigFromFile();
 
-                // Check if JWKS URL actually changed
-                if (!lastJwksUrl.equals(previousJwksUrl)) {
-                    monitor.info("JWKS URL changed from [" + previousJwksUrl + "] to [" + lastJwksUrl + "]");
-                    reloadDacService();
+                // Check if JWKS URL actually changed (with null safety)
+                if (lastJwksUrl != null) {
+                    if (previousJwksUrl == null || !lastJwksUrl.equals(previousJwksUrl)) {
+                        monitor.info("JWKS URL changed from [" + 
+                                   (previousJwksUrl != null ? previousJwksUrl : "null") + 
+                                   "] to [" + lastJwksUrl + "]");
+                        reloadDacService();
+                    } else {
+                        monitor.info("Config file changed but JWKS URL unchanged - no action needed");
+                    }
                 } else {
-                    monitor.info("Config file changed but JWKS URL unchanged - no action needed");
+                    monitor.warning("Config file changed but JWKS URL is still not configured");
                 }
             }
 
@@ -192,7 +244,7 @@ public class OAuth2HotReloadExtension implements ServiceExtension {
             // 1. Get the WebService instance
             // 2. Find the JWT validation filter
             // 3. Update its JWKS URL
-            
+
             monitor.warning("DAC service reload not yet fully implemented. " +
                     "The DAC service from Eclipse EDC does not expose a reload method. " +
                     "Consider extending the Eclipse EDC auth-delegated extension or " +
