@@ -96,6 +96,7 @@ include(":edc-extensions:agreements-bpns:bpns-evaluation-core")
 include(":edc-extensions:agreements-bpns:bpns-evaluation-store-sql")
 include(":edc-extensions:agreements-bpns:bpns-evaluation-spi")
 include(":edc-extensions:token-interceptor")
+include(":edc-extensions:oauth2-hot-reload")
 
 // test modules
 include(":edc-tests:e2e-fixtures")
