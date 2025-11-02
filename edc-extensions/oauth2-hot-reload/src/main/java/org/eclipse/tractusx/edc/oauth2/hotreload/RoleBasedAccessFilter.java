@@ -1,3 +1,22 @@
+/********************************************************************************
+ * Copyright (c) 2025 Your Company
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information regarding copyright ownership.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ********************************************************************************/
+
 package org.eclipse.tractusx.edc.oauth2.hotreload;
 
 import com.nimbusds.jwt.JWTClaimsSet;
@@ -44,10 +63,10 @@ public class RoleBasedAccessFilter implements ContainerRequestFilter {
         monitor.debug("=== RBAC Filter Called ===");
         monitor.debug("Method: " + method + ", Path: " + path + ", Full URI: " + fullUri);
 
-         if ("GET".equals(method)) {
-             monitor.debug("Skipping RBAC check for GET request");
-             return;
-         }
+        if ("GET".equals(method)) {
+            monitor.debug("Skipping RBAC check for GET request");
+            return;
+        }
 
         // Extract roles from JWT token
         Set<String> userRoles = extractRolesFromToken(requestContext);
@@ -132,8 +151,8 @@ public class RoleBasedAccessFilter implements ContainerRequestFilter {
 
                 try {
                     // Parse JWT token using nimbus-jwt library
-                    SignedJWT signedJWT = SignedJWT.parse(token);
-                    JWTClaimsSet claimsSet = signedJWT.getJWTClaimsSet();
+                    SignedJWT signedJwt = SignedJWT.parse(token);
+                    JWTClaimsSet claimsSet = signedJwt.getJWTClaimsSet();
 
                     // Convert claims to Map<String, Object>
                     Map<String, Object> claims = claimsSet.getClaims();
@@ -185,8 +204,11 @@ public class RoleBasedAccessFilter implements ContainerRequestFilter {
         // Also check resource_access if needed (for client-specific roles)
         Object resourceAccess = claims.get("resource_access");
         if (resourceAccess instanceof Map<?, ?>) {
+            @SuppressWarnings("unchecked")
             Map<String, Object> resourceAccessMap = (Map<String, Object>) resourceAccess;
             // Iterate through resource access entries if needed
+            // TODO: Extract client-specific roles from resource_access if needed
+            monitor.debug("Found resource_access in token, but not extracting roles yet");
         }
 
         return roles;

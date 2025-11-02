@@ -1,20 +1,20 @@
 /********************************************************************************
- * Custom Extension: OAuth2 Configuration Hot Reload
- * 
- * PURPOSE:
- * This extension monitors OAuth2 configuration changes (JWKS URL, audience)
- * and reloads the DAC (Delegated Authentication Client) service without restarting
- * the entire connector.
- * 
- * HOW IT WORKS:
- * 1. On startup, reads initial OAuth2 config from properties file
- * 2. Periodically checks if config has changed (every 30 seconds)
- * 3. If changed, reloads the JWT validator with new JWKS URL
- * 
- * CONFIG PROPERTIES SOURCE:
- * - Reads from: configuration.properties file (specified via -Dedc.fs.config)
- * - Or from: System properties / Environment variables
- * - Currently: File-based (you can extend to DB/config server)
+ * Copyright (c) 2025 Your Company
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information regarding copyright ownership.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
 package org.eclipse.tractusx.edc.oauth2.hotreload;
@@ -35,8 +35,26 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-@Extension(value = "OAuth2 Hot Reload Extension", categories = { "security", "oauth2" })
-public class OAuth2HotReloadExtension implements ServiceExtension {
+/**
+ * Custom Extension: OAuth2 Configuration Hot Reload
+ *
+ * PURPOSE:
+ * This extension monitors OAuth2 configuration changes (JWKS URL, audience)
+ * and reloads the DAC (Delegated Authentication Client) service without restarting
+ * the entire connector.
+ *
+ * HOW IT WORKS:
+ * 1. On startup, reads initial OAuth2 config from properties file
+ * 2. Periodically checks if config has changed (every 30 seconds)
+ * 3. If changed, reloads the JWT validator with new JWKS URL
+ *
+ * CONFIG PROPERTIES SOURCE:
+ * - Reads from: configuration.properties file (specified via -Dedc.fs.config)
+ * - Or from: System properties / Environment variables
+ * - Currently: File-based (you can extend to DB/config server)
+ */
+@Extension(value = "OAuth Hot Reload Extension", categories = { "security", "oauth2" })
+public class OauthHotReloadExtension implements ServiceExtension {
 
     @Inject
     private Monitor monitor;
@@ -52,18 +70,18 @@ public class OAuth2HotReloadExtension implements ServiceExtension {
 
     @Override
     public String name() {
-        return "OAuth2 Hot Reload Extension";
+        return "OAuth Hot Reload Extension";
     }
 
     @Override
     public void initialize(ServiceExtensionContext context) {
-        monitor.info("=== OAuth2 Hot Reload Extension Starting ===");
-        
+        monitor.info("=== OAuth Hot Reload Extension Starting ===");
+
         // Step 1: Find the config file location
         // EDC loads config from system property: edc.fs.config
         configFilePath = System.getProperty("edc.fs.config");
         if (configFilePath == null || configFilePath.isEmpty()) {
-            monitor.warning("OAuth2 Hot Reload: 'edc.fs.config' system property not set. " +
+            monitor.warning("OAuth Hot Reload: 'edc.fs.config' system property not set. " +
                     "Hot reload will monitor ServiceExtensionContext instead.");
             // Fallback: monitor via ServiceExtensionContext (requires restart to pick up changes)
             monitorConfigViaContext(context);
@@ -76,11 +94,11 @@ public class OAuth2HotReloadExtension implements ServiceExtension {
         // Step 3: Start periodic monitoring (every 30 seconds)
         scheduler = Executors.newScheduledThreadPool(1);
         scheduler.scheduleWithFixedDelay(
-            () -> checkAndReloadConfig(),
-            30, 30, TimeUnit.SECONDS
+                () -> checkAndReloadConfig(),
+                30, 30, TimeUnit.SECONDS
         );
 
-        monitor.info("OAuth2 Hot Reload Extension started - monitoring config file every 30 seconds");
+        monitor.info("OAuth Hot Reload Extension started - monitoring config file every 30 seconds");
         monitor.info("Config file path: " + configFilePath);
 
         // Register RBAC filter for Management API
@@ -99,7 +117,7 @@ public class OAuth2HotReloadExtension implements ServiceExtension {
         // Try multiple possible property names for compatibility
         String jwksUrl = getJwksUrlFromContext(context);
         String audience = getAudienceFromContext(context);
-        
+
         if (jwksUrl != null && !jwksUrl.isEmpty()) {
             lastJwksUrl = jwksUrl;
             lastAudience = audience;
@@ -165,7 +183,7 @@ public class OAuth2HotReloadExtension implements ServiceExtension {
                 // Fallback to alternative property name
                 jwksUrl = props.getProperty("edc.oauth.jwk.url");
             }
-            
+
             String audience = props.getProperty("web.http.management.auth.dac.audience");
             if (audience == null || audience.trim().isEmpty()) {
                 // Fallback to alternative property name
@@ -176,8 +194,8 @@ public class OAuth2HotReloadExtension implements ServiceExtension {
                 lastJwksUrl = jwksUrl.trim();
                 lastAudience = (audience != null && !audience.trim().isEmpty()) ? audience.trim() : null;
                 lastConfigFileModified = configFile.lastModified();
-                monitor.info("OAuth2 config loaded - JWKS URL: " + lastJwksUrl + 
-                           (lastAudience != null ? ", Audience: " + lastAudience : ""));
+                monitor.info("OAuth2 config loaded - JWKS URL: " + lastJwksUrl +
+                        (lastAudience != null ? ", Audience: " + lastAudience : ""));
             } else {
                 monitor.warning("OAuth2 config property not found in config file. " +
                         "Tried: 'web.http.management.auth.dac.key.url' and 'edc.oauth.jwk.url'");
@@ -201,16 +219,16 @@ public class OAuth2HotReloadExtension implements ServiceExtension {
             long currentModified = configFile.lastModified();
             if (currentModified > lastConfigFileModified) {
                 monitor.info("=== Config file changed! Reloading OAuth2 configuration ===");
-                
+
                 String previousJwksUrl = lastJwksUrl;
                 loadConfigFromFile();
 
                 // Check if JWKS URL actually changed (with null safety)
                 if (lastJwksUrl != null) {
                     if (previousJwksUrl == null || !lastJwksUrl.equals(previousJwksUrl)) {
-                        monitor.info("JWKS URL changed from [" + 
-                                   (previousJwksUrl != null ? previousJwksUrl : "null") + 
-                                   "] to [" + lastJwksUrl + "]");
+                        monitor.info("JWKS URL changed from [" +
+                                (previousJwksUrl != null ? previousJwksUrl : "null") +
+                                "] to [" + lastJwksUrl + "]");
                         reloadDacService();
                     } else {
                         monitor.info("Config file changed but JWKS URL unchanged - no action needed");
@@ -227,27 +245,27 @@ public class OAuth2HotReloadExtension implements ServiceExtension {
 
     /**
      * THIS IS THE KEY METHOD: Reloads the DAC (Delegated Authentication Client) service
-     * 
+     *
      * CHALLENGE: The DAC service is in Eclipse EDC's auth-delegated module.
      * We need to access it to reload the JWT validator with the new JWKS URL.
-     * 
+     *
      * APPROACH OPTIONS:
      * 1. Use ServiceExtensionContext to find the service (if it's registered)
      * 2. Use reflection to access internal services (risky, may break on EDC updates)
      * 3. Extend the Eclipse EDC DAC extension to expose a reload method (best, but requires EDC changes)
-     * 
+     *
      * For now, we'll log what needs to be done and provide a placeholder.
      */
     private void reloadDacService() {
         monitor.info("=== Attempting to reload DAC service with new JWKS URL ===");
-        
+
         // OPTION 1: Try to find DAC service via context (if it's accessible)
         // ServiceExtensionContext context = ...; // We'd need to store this
         // AuthenticationService authService = context.getService(AuthenticationService.class);
         // if (authService instanceof DelegatedAuthenticationService) {
         //     ((DelegatedAuthenticationService) authService).reloadJwksUrl(lastJwksUrl);
         // }
-        
+
         // OPTION 2: Use reflection to access internal JWT validator
         // This is fragile but might work:
         try {
@@ -261,12 +279,12 @@ public class OAuth2HotReloadExtension implements ServiceExtension {
                     "The DAC service from Eclipse EDC does not expose a reload method. " +
                     "Consider extending the Eclipse EDC auth-delegated extension or " +
                     "restart the connector for changes to take effect.");
-            
+
             // TODO: Implement actual reload logic here
             // This would require either:
             // - Modifying Eclipse EDC's auth-delegated extension to expose reload()
             // - Or using reflection to access and update the internal JWT validator
-            
+
         } catch (Exception e) {
             monitor.severe("Failed to reload DAC service: " + e.getMessage(), e);
         }
@@ -288,4 +306,3 @@ public class OAuth2HotReloadExtension implements ServiceExtension {
         }
     }
 }
-
