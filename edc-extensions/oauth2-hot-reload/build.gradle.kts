@@ -14,7 +14,7 @@ dependencies {
     implementation(libs.edc.spi.core)
     implementation(libs.edc.spi.web)
     implementation(libs.jakarta.rsApi)
-    implementation("jakarta.annotation:jakarta.annotation-api:2.1.1")
-//    implementation(libs.jakarta.jakartaAnnotation)
+    implementation(libs.jakartaAnnotation)
+    implementation(libs.nimbus.jwt)
 }
 

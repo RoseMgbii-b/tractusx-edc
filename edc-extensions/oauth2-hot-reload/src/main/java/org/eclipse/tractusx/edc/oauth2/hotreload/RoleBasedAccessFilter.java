@@ -1,5 +1,7 @@
 package org.eclipse.tractusx.edc.oauth2.hotreload;
 
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.SignedJWT;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerRequestFilter;
 import jakarta.ws.rs.core.Response;
@@ -7,37 +9,34 @@ import org.eclipse.edc.spi.monitor.Monitor;
 
 import java.io.IOException;
 import java.security.Principal;
+import java.text.ParseException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-// Note: Filter is registered manually via webService.registerResource()
-// @Provider annotation is NOT needed when manually registering
 public class RoleBasedAccessFilter implements ContainerRequestFilter {
 
     private final Monitor monitor;
 
-    // Constructor with Monitor parameter (required when manually instantiating)
     public RoleBasedAccessFilter(Monitor monitor) {
         this.monitor = monitor;
     }
 
-    // Map of path patterns to required roles
-    // You can customize this based on your needs
+
     private static final Map<String, Set<String>> PATH_ROLE_MAP = Map.of(
-            "api/management/v1/business-partner-groups", Set.of("ADMIN"),
-            "api/management/v3/businesspartnergroups", Set.of("ADMIN"),
-            "api/management/v3/policydefinitions", Set.of("ADMIN", "POLICY_WRITER"),
-            "api/management/v3/contractdefinitions", Set.of("ADMIN", "CONTRACT_WRITER"),
-            "api/management/v3/assets", Set.of("ADMIN", "ASSET_MANAGER")
+            // Paths are relative to Management API context
+            "v1/business-partner-groups", Set.of("ADMIN"),
+            "v3/business-partner-groups", Set.of("ADMIN"),
+            "v3/policydefinitions", Set.of("ADMIN", "POLICY_WRITER"),
+            "v3/contractdefinitions", Set.of("ADMIN", "CONTRACT_WRITER"),
+            "v3/assets", Set.of("ADMIN", "ASSET_MANAGER")
     );
 
 
     @Override
     public void filter(ContainerRequestContext requestContext) throws IOException {
-        // DEBUG: Always log to verify filter is being called
         String path = requestContext.getUriInfo().getPath();
         String method = requestContext.getMethod();
         String fullUri = requestContext.getUriInfo().getRequestUri().toString();
@@ -45,11 +44,10 @@ public class RoleBasedAccessFilter implements ContainerRequestFilter {
         monitor.debug("=== RBAC Filter Called ===");
         monitor.debug("Method: " + method + ", Path: " + path + ", Full URI: " + fullUri);
 
-        // TEMPORARY: Comment out early return for GET to test filter invocation
-        // if ("GET".equals(method)) {
-        //     monitor.debug("Skipping RBAC check for GET request");
-        //     return;
-        // }
+         if ("GET".equals(method)) {
+             monitor.debug("Skipping RBAC check for GET request");
+             return;
+         }
 
         // Extract roles from JWT token
         Set<String> userRoles = extractRolesFromToken(requestContext);
@@ -110,30 +108,51 @@ public class RoleBasedAccessFilter implements ContainerRequestFilter {
     @SuppressWarnings("unchecked")
     private Set<String> extractRolesFromToken(ContainerRequestContext requestContext) {
         try {
-            // The JWT claims are typically stored in the security context or as a request property
-            // The exact way depends on how the DAC extension stores them
-
             // OPTION 1: Try to get from request property (common pattern)
             Object claimsObj = requestContext.getProperty("edc.jwt.claims");
             if (claimsObj instanceof Map<?, ?>) {
                 Map<String, Object> claims = (Map<String, Object>) claimsObj;
+                monitor.debug("Found JWT claims in request property");
                 return extractRolesFromClaims(claims);
             }
 
             // OPTION 2: Try to get from security context
             Principal principal = requestContext.getSecurityContext().getUserPrincipal();
             if (principal != null) {
-                // Principal might have claims attached
-                // You might need to cast it or access differently depending on implementation
+                monitor.debug("Principal found in security context: " + principal.getName());
+                // Principal might have claims attached - you might need to cast it
+                // depending on implementation
             }
 
             // OPTION 3: Parse Authorization header directly (fallback)
             String authHeader = requestContext.getHeaderString("Authorization");
             if (authHeader != null && authHeader.startsWith("Bearer ")) {
-                // You'd need to decode JWT here - requires JWT library
-                // For now, return empty set
+                String token = authHeader.substring("Bearer ".length()).trim();
+                monitor.debug("Parsing JWT token from Authorization header");
+
+                try {
+                    // Parse JWT token using nimbus-jwt library
+                    SignedJWT signedJWT = SignedJWT.parse(token);
+                    JWTClaimsSet claimsSet = signedJWT.getJWTClaimsSet();
+
+                    // Convert claims to Map<String, Object>
+                    Map<String, Object> claims = claimsSet.getClaims();
+
+                    // Extract roles using the existing method
+                    Set<String> roles = extractRolesFromClaims(claims);
+                    monitor.debug("Extracted roles from JWT token: " + roles);
+                    return roles;
+
+                } catch (ParseException e) {
+                    monitor.warning("Failed to parse JWT token from Authorization header: " + e.getMessage());
+                    return Set.of();
+                } catch (Exception e) {
+                    monitor.warning("Error extracting roles from JWT token: " + e.getMessage(), e);
+                    return Set.of();
+                }
             }
 
+            monitor.warning("No JWT token found in request - no Authorization header");
             return Set.of();
 
         } catch (Exception e) {
