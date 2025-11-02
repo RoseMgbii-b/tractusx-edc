@@ -24,6 +24,8 @@ import org.eclipse.edc.runtime.metamodel.annotation.Inject;
 import org.eclipse.edc.spi.monitor.Monitor;
 import org.eclipse.edc.spi.system.ServiceExtension;
 import org.eclipse.edc.spi.system.ServiceExtensionContext;
+import org.eclipse.edc.web.spi.WebService;
+import org.eclipse.edc.web.spi.configuration.ApiContext;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -38,6 +40,9 @@ public class OAuth2HotReloadExtension implements ServiceExtension {
 
     @Inject
     private Monitor monitor;
+
+    @Inject
+    private WebService webService;
 
     private ScheduledExecutorService scheduler;
     private volatile String lastJwksUrl;
@@ -77,6 +82,13 @@ public class OAuth2HotReloadExtension implements ServiceExtension {
 
         monitor.info("OAuth2 Hot Reload Extension started - monitoring config file every 30 seconds");
         monitor.info("Config file path: " + configFilePath);
+
+        // Register RBAC filter for Management API
+        RoleBasedAccessFilter rbacFilter = new RoleBasedAccessFilter(context.getMonitor());
+        webService.registerResource(ApiContext.MANAGEMENT, rbacFilter);
+        monitor.info("=== RBAC filter registered for Management API context ===");
+        monitor.info("Filter will intercept all requests to /api/management/*");
+
     }
 
     /**
