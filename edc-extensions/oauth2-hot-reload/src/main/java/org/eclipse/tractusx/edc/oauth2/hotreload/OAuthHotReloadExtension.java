@@ -107,6 +107,21 @@ public class OauthHotReloadExtension implements ServiceExtension {
         monitor.info("=== RBAC filter registered for Management API context ===");
         monitor.info("Filter will intercept all requests to /api/management/*");
 
+
+        // Register HTTPS enforcement filter for Management API
+        boolean allowRedirect = context.getSetting("web.http.management.https.redirect", false);
+        int httpsPort = context.getSetting("web.http.management.https.port", 8443);
+
+        HttpsEnforcementFilter httpsFilter = new HttpsEnforcementFilter(
+                context.getMonitor(),
+                allowRedirect,  // Set to true to redirect, false to reject
+                httpsPort
+        );
+
+//        webService.registerResource(ApiContext.MANAGEMENT, httpsFilter);
+//        monitor.info("HTTPS enforcement filter registered for Management API");
+
+
     }
 
     /**
