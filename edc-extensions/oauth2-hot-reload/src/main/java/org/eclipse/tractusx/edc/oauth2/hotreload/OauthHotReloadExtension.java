@@ -39,19 +39,29 @@ import java.util.concurrent.TimeUnit;
  * Custom Extension: OAuth2 Configuration Hot Reload
  *
  * PURPOSE:
- * This extension monitors OAuth2 configuration changes (JWKS URL, audience)
- * and reloads the DAC (Delegated Authentication Client) service without restarting
- * the entire connector.
+ * This extension provides a CUSTOM OAuth2/JWT validation implementation that REPLACES
+ * the native EDC DAC (Delegated Authentication Client) and supports hot reload of
+ * OAuth2 configuration (JWKS URL, audience, issuer) without restarting the connector.
  *
  * HOW IT WORKS:
  * 1. On startup, reads initial OAuth2 config from properties file
- * 2. Periodically checks if config has changed (every 30 seconds)
- * 3. If changed, reloads the JWT validator with new JWKS URL
+ * 2. Creates and registers a custom JWT validation filter (HotReloadableJwtValidationFilter)
+ *    that validates JWT tokens using JWKS
+ * 3. Periodically checks if config has changed (every 30 seconds)
+ * 4. If changed, hot-reloads the JWT validator with new JWKS URL/audience/issuer
+ *
+ * KEY DIFFERENCE FROM NATIVE DAC:
+ * - Native DAC: Cannot be reloaded at runtime (requires restart)
+ * - Custom Implementation: Supports hot reload of configuration
  *
  * CONFIG PROPERTIES SOURCE:
  * - Reads from: configuration.properties file (specified via -Dedc.fs.config)
- * - Or from: System properties / Environment variables
- * - Currently: File-based (you can extend to DB/config server)
+ * - Properties: web.http.management.auth.dac.key.url, web.http.management.auth.dac.audience
+ * - Optional: edc.oauth.provider.issuer (or extracted from JWKS URL)
+ *
+ * IMPORTANT:
+ * To use this custom implementation instead of native DAC, you may need to disable
+ * the native DAC extension or ensure this extension runs with higher priority.
  */
 @Extension(value = "OAuth Hot Reload Extension", categories = { "security", "oauth2" })
 public class OauthHotReloadExtension implements ServiceExtension {
@@ -65,8 +75,10 @@ public class OauthHotReloadExtension implements ServiceExtension {
     private ScheduledExecutorService scheduler;
     private volatile String lastJwksUrl;
     private volatile String lastAudience;
+    private volatile String lastIssuer;
     private volatile String configFilePath;
     private volatile long lastConfigFileModified;
+    private HotReloadableJwtValidationFilter jwtValidationFilter;
 
     @Override
     public String name() {
@@ -91,7 +103,29 @@ public class OauthHotReloadExtension implements ServiceExtension {
         // Step 2: Load initial config
         loadConfigFromFile();
 
-        // Step 3: Start periodic monitoring (every 30 seconds)
+        // Step 3: Create and register custom JWT validation filter (replaces native DAC)
+        jwtValidationFilter = new HotReloadableJwtValidationFilter(context.getMonitor());
+        
+        // Initialize filter with current configuration
+        if (lastJwksUrl != null && !lastJwksUrl.isEmpty()) {
+            jwtValidationFilter.updateConfiguration(lastJwksUrl, lastAudience, lastIssuer);
+            monitor.info("Custom JWT validation filter initialized with JWKS URL: " + lastJwksUrl);
+        } else {
+            monitor.warning("JWKS URL not configured. JWT validation filter will reject all requests until configured.");
+        }
+        
+        // Register JWT validation filter FIRST (high priority - runs before other filters)
+        webService.registerResource(ApiContext.MANAGEMENT, jwtValidationFilter);
+        monitor.info("=== Custom JWT validation filter registered for Management API context ===");
+        monitor.info("This filter REPLACES the native EDC DAC implementation and supports hot reload");
+
+        // Step 4: Register RBAC filter for Management API (runs after JWT validation)
+        RoleBasedAccessFilter rbacFilter = new RoleBasedAccessFilter(context.getMonitor());
+        webService.registerResource(ApiContext.MANAGEMENT, rbacFilter);
+        monitor.info("=== RBAC filter registered for Management API context ===");
+        monitor.info("Filter will intercept all requests to /api/management/*");
+
+        // Step 5: Start periodic monitoring (every 30 seconds)
         scheduler = Executors.newScheduledThreadPool(1);
         scheduler.scheduleWithFixedDelay(
                 () -> checkAndReloadConfig(),
@@ -100,12 +134,6 @@ public class OauthHotReloadExtension implements ServiceExtension {
 
         monitor.info("OAuth Hot Reload Extension started - monitoring config file every 30 seconds");
         monitor.info("Config file path: " + configFilePath);
-
-        // Register RBAC filter for Management API
-        RoleBasedAccessFilter rbacFilter = new RoleBasedAccessFilter(context.getMonitor());
-        webService.registerResource(ApiContext.MANAGEMENT, rbacFilter);
-        monitor.info("=== RBAC filter registered for Management API context ===");
-        monitor.info("Filter will intercept all requests to /api/management/*");
 
 
         // Register HTTPS enforcement filter for Management API
@@ -143,33 +171,40 @@ public class OauthHotReloadExtension implements ServiceExtension {
     }
 
     /**
-     * Gets JWKS URL from context, trying multiple property name variants
+     * Gets JWKS URL from context using OAuth2 provider properties
      */
     private String getJwksUrlFromContext(ServiceExtensionContext context) {
-        // Try the delegated auth property first (correct one for Management API)
-        String url = context.getSetting("web.http.management.auth.dac.key.url", null);
-        if (url != null && !url.isEmpty()) {
-            return url;
-        }
-        // Try alternative property names
-        url = context.getSetting("edc.oauth.jwk.url", null);
-        if (url != null && !url.isEmpty()) {
-            return url;
-        }
-        return null;
+        return context.getSetting("edc.oauth.provider.jwks.url", null);
     }
 
     /**
-     * Gets audience from context, trying multiple property name variants
+     * Gets audience from context using OAuth2 provider properties
      */
     private String getAudienceFromContext(ServiceExtensionContext context) {
-        String audience = context.getSetting("web.http.management.auth.dac.audience", null);
-        if (audience != null && !audience.isEmpty()) {
-            return audience;
+        return context.getSetting("edc.oauth.provider.audience", null);
+    }
+
+    /**
+     * Gets issuer from context, trying multiple property name variants
+     */
+    private String getIssuerFromContext(ServiceExtensionContext context) {
+        String issuer = context.getSetting("edc.oauth.provider.issuer", null);
+        if (issuer != null && !issuer.isEmpty()) {
+            return issuer;
         }
-        audience = context.getSetting("edc.oauth.audience", null);
-        if (audience != null && !audience.isEmpty()) {
-            return audience;
+        // Try to extract issuer from JWKS URL (common pattern: .../realms/{realm})
+        String jwksUrl = getJwksUrlFromContext(context);
+        if (jwksUrl != null && jwksUrl.contains("/realms/")) {
+            // Extract issuer from JWKS URL pattern: .../realms/{realm}/protocol/...
+            int realmsIndex = jwksUrl.indexOf("/realms/");
+            if (realmsIndex > 0) {
+                String baseUrl = jwksUrl.substring(0, realmsIndex);
+                int protocolIndex = jwksUrl.indexOf("/protocol/", realmsIndex);
+                if (protocolIndex > 0) {
+                    String realm = jwksUrl.substring(realmsIndex + "/realms/".length(), protocolIndex);
+                    return baseUrl + "/realms/" + realm;
+                }
+            }
         }
         return null;
     }
@@ -191,28 +226,37 @@ public class OauthHotReloadExtension implements ServiceExtension {
                 props.load(fis);
             }
 
-            // Try multiple property name variants (in order of preference)
-            String jwksUrl = props.getProperty("web.http.management.auth.dac.key.url");
-            if (jwksUrl == null || jwksUrl.trim().isEmpty()) {
-                // Fallback to alternative property name
-                jwksUrl = props.getProperty("edc.oauth.jwk.url");
-            }
+            // Use OAuth2 provider properties as primary source
+            String jwksUrl = props.getProperty("edc.oauth.provider.jwks.url");
+            String audience = props.getProperty("edc.oauth.provider.audience");
 
-            String audience = props.getProperty("web.http.management.auth.dac.audience");
-            if (audience == null || audience.trim().isEmpty()) {
-                // Fallback to alternative property name
-                audience = props.getProperty("edc.oauth.audience");
+            String issuer = props.getProperty("edc.oauth.provider.issuer");
+            if (issuer == null || issuer.trim().isEmpty()) {
+                // Try to extract issuer from JWKS URL (common pattern: .../realms/{realm})
+                if (jwksUrl != null && jwksUrl.contains("/realms/")) {
+                    int realmsIndex = jwksUrl.indexOf("/realms/");
+                    if (realmsIndex > 0) {
+                        String baseUrl = jwksUrl.substring(0, realmsIndex);
+                        int protocolIndex = jwksUrl.indexOf("/protocol/", realmsIndex);
+                        if (protocolIndex > 0) {
+                            String realm = jwksUrl.substring(realmsIndex + "/realms/".length(), protocolIndex);
+                            issuer = baseUrl + "/realms/" + realm;
+                        }
+                    }
+                }
             }
 
             if (jwksUrl != null && !jwksUrl.trim().isEmpty()) {
                 lastJwksUrl = jwksUrl.trim();
                 lastAudience = (audience != null && !audience.trim().isEmpty()) ? audience.trim() : null;
+                lastIssuer = (issuer != null && !issuer.trim().isEmpty()) ? issuer.trim() : null;
                 lastConfigFileModified = configFile.lastModified();
                 monitor.info("OAuth2 config loaded - JWKS URL: " + lastJwksUrl +
-                        (lastAudience != null ? ", Audience: " + lastAudience : ""));
+                        (lastAudience != null ? ", Audience: " + lastAudience : "") +
+                        (lastIssuer != null ? ", Issuer: " + lastIssuer : ""));
             } else {
                 monitor.warning("OAuth2 config property not found in config file. " +
-                        "Tried: 'web.http.management.auth.dac.key.url' and 'edc.oauth.jwk.url'");
+                        "Required: 'edc.oauth.provider.jwks.url'");
             }
 
         } catch (IOException e) {
@@ -234,18 +278,44 @@ public class OauthHotReloadExtension implements ServiceExtension {
             if (currentModified > lastConfigFileModified) {
                 monitor.info("=== Config file changed! Reloading OAuth2 configuration ===");
 
+                // Store previous values
                 String previousJwksUrl = lastJwksUrl;
+                String previousAudience = lastAudience;
+                String previousIssuer = lastIssuer;
+                
+                // Reload config from file
                 loadConfigFromFile();
 
-                // Check if JWKS URL actually changed (with null safety)
+                // Check if any OAuth2 config actually changed
+                boolean configChanged = false;
                 if (lastJwksUrl != null) {
                     if (previousJwksUrl == null || !lastJwksUrl.equals(previousJwksUrl)) {
                         monitor.info("JWKS URL changed from [" +
                                 (previousJwksUrl != null ? previousJwksUrl : "null") +
                                 "] to [" + lastJwksUrl + "]");
+                        configChanged = true;
+                    }
+                    
+                    // Check audience change
+                    if (!java.util.Objects.equals(previousAudience, lastAudience)) {
+                        monitor.info("Audience changed from [" +
+                                (previousAudience != null ? previousAudience : "null") +
+                                "] to [" + (lastAudience != null ? lastAudience : "null") + "]");
+                        configChanged = true;
+                    }
+                    
+                    // Check issuer change
+                    if (!java.util.Objects.equals(previousIssuer, lastIssuer)) {
+                        monitor.info("Issuer changed from [" +
+                                (previousIssuer != null ? previousIssuer : "null") +
+                                "] to [" + (lastIssuer != null ? lastIssuer : "null") + "]");
+                        configChanged = true;
+                    }
+                    
+                    if (configChanged) {
                         reloadDacService();
                     } else {
-                        monitor.info("Config file changed but JWKS URL unchanged - no action needed");
+                        monitor.info("Config file changed but OAuth2 configuration unchanged - no action needed");
                     }
                 } else {
                     monitor.warning("Config file changed but JWKS URL is still not configured");
@@ -258,49 +328,31 @@ public class OauthHotReloadExtension implements ServiceExtension {
     }
 
     /**
-     * THIS IS THE KEY METHOD: Reloads the DAC (Delegated Authentication Client) service
-     *
-     * CHALLENGE: The DAC service is in Eclipse EDC's auth-delegated module.
-     * We need to access it to reload the JWT validator with the new JWKS URL.
-     *
-     * APPROACH OPTIONS:
-     * 1. Use ServiceExtensionContext to find the service (if it's registered)
-     * 2. Use reflection to access internal services (risky, may break on EDC updates)
-     * 3. Extend the Eclipse EDC DAC extension to expose a reload method (best, but requires EDC changes)
-     *
-     * For now, we'll log what needs to be done and provide a placeholder.
+     * Reloads the custom JWT validation filter with new configuration
+     * This method is called when the config file changes and JWKS URL/audience/issuer are updated
      */
     private void reloadDacService() {
-        monitor.info("=== Attempting to reload DAC service with new JWKS URL ===");
+        monitor.info("=== Reloading custom JWT validation filter with new configuration ===");
 
-        // OPTION 1: Try to find DAC service via context (if it's accessible)
-        // ServiceExtensionContext context = ...; // We'd need to store this
-        // AuthenticationService authService = context.getService(AuthenticationService.class);
-        // if (authService instanceof DelegatedAuthenticationService) {
-        //     ((DelegatedAuthenticationService) authService).reloadJwksUrl(lastJwksUrl);
-        // }
+        if (jwtValidationFilter == null) {
+            monitor.warning("JWT validation filter not initialized. Cannot reload.");
+            return;
+        }
 
-        // OPTION 2: Use reflection to access internal JWT validator
-        // This is fragile but might work:
+        if (lastJwksUrl == null || lastJwksUrl.isEmpty()) {
+            monitor.warning("JWKS URL is not configured. Cannot reload JWT validator.");
+            return;
+        }
+
         try {
-            // The actual implementation is in: org.eclipse.edc.auth.delegated.*
-            // We'd need to:
-            // 1. Get the WebService instance
-            // 2. Find the JWT validation filter
-            // 3. Update its JWKS URL
-
-            monitor.warning("DAC service reload not yet fully implemented. " +
-                    "The DAC service from Eclipse EDC does not expose a reload method. " +
-                    "Consider extending the Eclipse EDC auth-delegated extension or " +
-                    "restart the connector for changes to take effect.");
-
-            // TODO: Implement actual reload logic here
-            // This would require either:
-            // - Modifying Eclipse EDC's auth-delegated extension to expose reload()
-            // - Or using reflection to access and update the internal JWT validator
-
+            // Update the filter with new configuration (thread-safe)
+            jwtValidationFilter.updateConfiguration(lastJwksUrl, lastAudience, lastIssuer);
+            monitor.info("✅ JWT validation filter successfully reloaded with new configuration");
+            monitor.info("   JWKS URL: " + lastJwksUrl +
+                    (lastAudience != null ? ", Audience: " + lastAudience : "") +
+                    (lastIssuer != null ? ", Issuer: " + lastIssuer : ""));
         } catch (Exception e) {
-            monitor.severe("Failed to reload DAC service: " + e.getMessage(), e);
+            monitor.severe("Failed to reload JWT validation filter: " + e.getMessage(), e);
         }
     }
 

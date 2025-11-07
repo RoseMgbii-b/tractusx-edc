@@ -29,6 +29,9 @@ configurations.all {
 
     // identity-trust-sts-remote-client excluded because we have the tx-dcp-sts-dim that takes care to define the correct client in case of DIM
     exclude("org.eclipse.edc", "identity-trust-sts-remote-client")
+    
+    // auth-delegated excluded to use custom hot-reloadable OAuth2 implementation instead
+    exclude("org.eclipse.edc", "auth-delegated")
 }
 
 dependencies {
