@@ -118,8 +118,8 @@ public class OauthHotReloadExtension implements ServiceExtension {
                 httpsPort
         );
 
-//        webService.registerResource(ApiContext.MANAGEMENT, httpsFilter);
-//        monitor.info("HTTPS enforcement filter registered for Management API");
+        //        webService.registerResource(ApiContext.MANAGEMENT, httpsFilter);
+        //        monitor.info("HTTPS enforcement filter registered for Management API");
 
     }
 
