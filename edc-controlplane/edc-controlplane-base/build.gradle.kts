@@ -65,6 +65,7 @@ dependencies {
     implementation(project(":edc-extensions:token-interceptor"))
     implementation(project(":edc-extensions:oauth2-hot-reload"))
     implementation(project(":edc-extensions:trusted-issuers-hot-reload"))
+    implementation(project(":edc-extensions:user-management"))
     runtimeOnly(project(":edc-extensions:event-subscriber"))
 
     runtimeOnly(libs.bundles.edc.monitoring)
