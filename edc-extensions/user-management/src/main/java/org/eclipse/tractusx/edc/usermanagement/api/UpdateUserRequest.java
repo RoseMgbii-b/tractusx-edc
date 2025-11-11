@@ -22,6 +22,8 @@ package org.eclipse.tractusx.edc.usermanagement.api;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.util.List;
+
 /**
  * Request DTO for updating a user
  */
@@ -30,16 +32,20 @@ public class UpdateUserRequest {
     private final String firstName;
     private final String lastName;
     private final Boolean enabled;
+    private final List<String> roles;
+
 
     @JsonCreator
     public UpdateUserRequest(@JsonProperty("email") String email,
                             @JsonProperty("firstName") String firstName,
                             @JsonProperty("lastName") String lastName,
-                            @JsonProperty("enabled") Boolean enabled) {
+                            @JsonProperty("enabled") Boolean enabled,
+                            @JsonProperty("roles") List<String> roles) {
         this.email = email;
         this.firstName = firstName;
         this.lastName = lastName;
         this.enabled = enabled;
+        this.roles = roles;
     }
 
     public String getEmail() {
@@ -56,6 +62,10 @@ public class UpdateUserRequest {
 
     public Boolean getEnabled() {
         return enabled;
+    }
+
+    public List<String> getRoles() {
+        return roles;
     }
 }
 

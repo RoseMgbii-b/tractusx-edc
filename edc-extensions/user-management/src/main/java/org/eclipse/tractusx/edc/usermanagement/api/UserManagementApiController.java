@@ -104,7 +104,8 @@ public class UserManagementApiController {
                 request.getEmail(),
                 request.getFirstName(),
                 request.getLastName(),
-                request.getEnabled()
+                request.getEnabled(),
+                request.getRoles()
         );
 
         if (result.succeeded()) {

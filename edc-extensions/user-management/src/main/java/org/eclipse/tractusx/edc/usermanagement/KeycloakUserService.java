@@ -19,6 +19,8 @@
 
 package org.eclipse.tractusx.edc.usermanagement;
 
+import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.core.Response;
 import org.eclipse.edc.spi.result.Result;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.KeycloakBuilder;
@@ -26,6 +28,7 @@ import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.admin.client.resource.UserResource;
 import org.keycloak.admin.client.resource.UsersResource;
 import org.keycloak.representations.idm.CredentialRepresentation;
+import org.keycloak.representations.idm.RoleRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.eclipse.edc.spi.monitor.Monitor;
 
@@ -82,7 +85,7 @@ public class KeycloakUserService {
             user.setEmailVerified(false);
 
             // Create user
-            jakarta.ws.rs.core.Response response = usersResource.create(user);
+            Response response = usersResource.create(user);
             
             if (response.getStatus() != 201) {
                 String errorMessage = "Failed to create user. Status: " + response.getStatus();
@@ -122,7 +125,7 @@ public class KeycloakUserService {
      * Update user information
      */
     public Result<UserRepresentation> updateUser(String userId, String email, String firstName, 
-                                                  String lastName, Boolean enabled) {
+                                                  String lastName, Boolean enabled, List<String> roles) {
         try {
             RealmResource realm = keycloak.realm(realmName);
             UserResource userResource = realm.users().get(userId);
@@ -146,13 +149,17 @@ public class KeycloakUserService {
                 user.setEnabled(enabled);
             }
 
+            if (roles != null && !roles.isEmpty()) {
+                assignRoles(userResource, roles);
+            }
+
             userResource.update(user);
             
             UserRepresentation updatedUser = userResource.toRepresentation();
             monitor.info("User updated successfully: " + userId);
             return Result.success(updatedUser);
 
-        } catch (jakarta.ws.rs.NotFoundException e) {
+        } catch (NotFoundException e) {
             return Result.failure("User with ID '" + userId + "' not found");
         } catch (Exception e) {
             monitor.severe("Failed to update user: " + e.getMessage(), e);
@@ -179,7 +186,7 @@ public class KeycloakUserService {
             monitor.info("User disabled successfully: " + userId);
             return Result.success();
 
-        } catch (jakarta.ws.rs.NotFoundException e) {
+        } catch (NotFoundException e) {
             return Result.failure("User with ID '" + userId + "' not found");
         } catch (Exception e) {
             monitor.severe("Failed to disable user: " + e.getMessage(), e);
@@ -206,7 +213,7 @@ public class KeycloakUserService {
             monitor.info("User enabled successfully: " + userId);
             return Result.success();
 
-        } catch (jakarta.ws.rs.NotFoundException e) {
+        } catch (NotFoundException e) {
             return Result.failure("User with ID '" + userId + "' not found");
         } catch (Exception e) {
             monitor.severe("Failed to enable user: " + e.getMessage(), e);
@@ -311,10 +318,10 @@ public class KeycloakUserService {
             RealmResource realm = keycloak.realm(realmName);
             
             // Get realm roles
-            List<org.keycloak.representations.idm.RoleRepresentation> realmRoles = realm.roles().list();
+            List<RoleRepresentation> realmRoles = realm.roles().list();
             
             // Filter roles that exist in Keycloak
-            List<org.keycloak.representations.idm.RoleRepresentation> rolesToAssign = realmRoles.stream()
+            List<RoleRepresentation> rolesToAssign = realmRoles.stream()
                     .filter(role -> roles.contains(role.getName()))
                     .collect(Collectors.toList());
             
@@ -346,10 +353,10 @@ public class KeycloakUserService {
     /**
      * Get all available realm roles
      */
-    public Result<List<org.keycloak.representations.idm.RoleRepresentation>> getRealmRoles() {
+    public Result<List<RoleRepresentation>> getRealmRoles() {
         try {
             RealmResource realm = keycloak.realm(realmName);
-            List<org.keycloak.representations.idm.RoleRepresentation> roles = realm.roles().list();
+            List<RoleRepresentation> roles = realm.roles().list();
             
             monitor.debug("Retrieved " + roles.size() + " realm roles from Keycloak");
             return Result.success(roles);
