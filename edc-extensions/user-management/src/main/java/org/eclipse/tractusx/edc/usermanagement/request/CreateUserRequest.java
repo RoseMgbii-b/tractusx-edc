@@ -17,7 +17,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-package org.eclipse.tractusx.edc.usermanagement.api;
+package org.eclipse.tractusx.edc.usermanagement.request;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -25,27 +25,33 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 /**
- * Request DTO for updating a user
+ * Request DTO for creating a user
  */
-public class UpdateUserRequest {
+public class CreateUserRequest {
+    private final String username;
     private final String email;
     private final String firstName;
     private final String lastName;
-    private final Boolean enabled;
+    private final String temporaryPassword;
     private final List<String> roles;
 
-
     @JsonCreator
-    public UpdateUserRequest(@JsonProperty("email") String email,
+    public CreateUserRequest(@JsonProperty("username") String username,
+                            @JsonProperty("email") String email,
                             @JsonProperty("firstName") String firstName,
                             @JsonProperty("lastName") String lastName,
-                            @JsonProperty("enabled") Boolean enabled,
+                            @JsonProperty("temporaryPassword") String temporaryPassword,
                             @JsonProperty("roles") List<String> roles) {
+        this.username = username;
         this.email = email;
         this.firstName = firstName;
         this.lastName = lastName;
-        this.enabled = enabled;
+        this.temporaryPassword = temporaryPassword;
         this.roles = roles;
+    }
+
+    public String getUsername() {
+        return username;
     }
 
     public String getEmail() {
@@ -60,8 +66,8 @@ public class UpdateUserRequest {
         return lastName;
     }
 
-    public Boolean getEnabled() {
-        return enabled;
+    public String getTemporaryPassword() {
+        return temporaryPassword;
     }
 
     public List<String> getRoles() {

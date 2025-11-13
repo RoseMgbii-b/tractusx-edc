@@ -17,37 +17,48 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-package org.eclipse.tractusx.edc.usermanagement.api;
+package org.eclipse.tractusx.edc.usermanagement.dto;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.json.JsonObject;
 
 import java.util.List;
 
 /**
- * Request DTO for creating a user
+ * DTO for user representation
  */
-public class CreateUserRequest {
+public class UserDto {
+    private final String id;
     private final String username;
     private final String email;
     private final String firstName;
     private final String lastName;
-    private final String temporaryPassword;
+    private final Boolean enabled;
+    private final Boolean emailVerified;
     private final List<String> roles;
 
     @JsonCreator
-    public CreateUserRequest(@JsonProperty("username") String username,
-                            @JsonProperty("email") String email,
-                            @JsonProperty("firstName") String firstName,
-                            @JsonProperty("lastName") String lastName,
-                            @JsonProperty("temporaryPassword") String temporaryPassword,
-                            @JsonProperty("roles") List<String> roles) {
+    public UserDto(@JsonProperty("id") String id,
+                   @JsonProperty("username") String username,
+                   @JsonProperty("email") String email,
+                   @JsonProperty("firstName") String firstName,
+                   @JsonProperty("lastName") String lastName,
+                   @JsonProperty("enabled") Boolean enabled,
+                   @JsonProperty("emailVerified") Boolean emailVerified,
+                   @JsonProperty("roles") List<String> roles) {
+        this.id = id;
         this.username = username;
         this.email = email;
         this.firstName = firstName;
         this.lastName = lastName;
-        this.temporaryPassword = temporaryPassword;
+        this.enabled = enabled;
+        this.emailVerified = emailVerified;
         this.roles = roles;
+    }
+
+    public String getId() {
+        return id;
     }
 
     public String getUsername() {
@@ -66,12 +77,29 @@ public class CreateUserRequest {
         return lastName;
     }
 
-    public String getTemporaryPassword() {
-        return temporaryPassword;
+    public Boolean getEnabled() {
+        return enabled;
+    }
+
+    public Boolean getEmailVerified() {
+        return emailVerified;
     }
 
     public List<String> getRoles() {
         return roles;
+    }
+
+    public static UserDto from(JsonObject json) {
+        return new UserDto(
+                json.getString("id", null),
+                json.getString("username", null),
+                json.getString("email", null),
+                json.getString("firstName", null),
+                json.getString("lastName", null),
+                json.getBoolean("enabled", true),
+                json.getBoolean("emailVerified", false),
+                null // Roles would need to be extracted separately
+        );
     }
 }
 

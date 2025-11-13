@@ -27,7 +27,6 @@ import org.eclipse.edc.spi.system.ServiceExtension;
 import org.eclipse.edc.spi.system.ServiceExtensionContext;
 import org.eclipse.edc.web.spi.WebService;
 import org.eclipse.edc.web.spi.configuration.ApiContext;
-import org.eclipse.tractusx.edc.usermanagement.api.UserManagementApiController;
 
 /**
  * Extension for managing users in Keycloak via Management API

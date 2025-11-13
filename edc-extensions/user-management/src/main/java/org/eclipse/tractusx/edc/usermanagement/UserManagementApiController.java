@@ -17,7 +17,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-package org.eclipse.tractusx.edc.usermanagement.api;
+package org.eclipse.tractusx.edc.usermanagement;
 
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
@@ -29,7 +29,10 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.edc.spi.monitor.Monitor;
 import org.eclipse.edc.spi.result.Result;
-import org.eclipse.tractusx.edc.usermanagement.KeycloakUserService;
+import org.eclipse.tractusx.edc.usermanagement.dto.RoleDto;
+import org.eclipse.tractusx.edc.usermanagement.dto.UserDto;
+import org.eclipse.tractusx.edc.usermanagement.request.CreateUserRequest;
+import org.eclipse.tractusx.edc.usermanagement.request.UpdateUserRequest;
 import org.keycloak.representations.idm.RoleRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 
