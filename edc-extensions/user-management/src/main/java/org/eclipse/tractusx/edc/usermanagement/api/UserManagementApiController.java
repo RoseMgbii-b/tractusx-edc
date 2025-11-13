@@ -20,7 +20,6 @@
 package org.eclipse.tractusx.edc.usermanagement.api;
 
 import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
@@ -259,7 +258,6 @@ public class UserManagementApiController {
                 role.getName(),
                 role.getDescription(),
                 role.isComposite()
-//                role.isClientRole()
         );
     }
 }

@@ -28,6 +28,8 @@ testcontainers = "1.21.3"
 testcontainers-keycloak = "3.8.0"
 titanium = "1.7.0"
 log4j2 = "2.25.2"
+keycloak = "25.0.0"
+restEasy = "6.2.9.Final"
 
 
 [libraries]
@@ -221,6 +223,10 @@ testcontainers-minio = { module = "org.testcontainers:minio", version.ref = "tes
 testcontainers-localstack = { module = "org.testcontainers:localstack", version.ref = "testcontainers" }
 testcontainers-postgres = { module = "org.testcontainers:postgresql", version.ref = "testcontainers" }
 titaniumJsonLd = { module = "com.apicatalog:titanium-json-ld", version.ref = "titanium" }
+keycloak = { module = "org.keycloak:keycloak-admin-client", version.ref = "keycloak" }
+rest-easy-client = {module = "org.jboss.resteasy:resteasy-client", version.ref = "restEasy"}
+rest-easy-client-api = {module = "org.jboss.resteasy:resteasy-client-api", version.ref = "restEasy"}
+rest-easy-client-jackson = {module = "org.jboss.resteasy:resteasy-jackson2-provider", version.ref = "restEasy"}
 
 log4j2-api = { module = "org.apache.logging.log4j:log4j-api", version.ref = "log4j2" }
 log4j2-core = { module = "org.apache.logging.log4j:log4j-core", version.ref = "log4j2" }

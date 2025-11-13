@@ -21,6 +21,7 @@ package org.eclipse.tractusx.edc.usermanagement;
 
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.core.Response;
+import org.eclipse.edc.spi.monitor.Monitor;
 import org.eclipse.edc.spi.result.Result;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.KeycloakBuilder;
@@ -30,8 +31,8 @@ import org.keycloak.admin.client.resource.UsersResource;
 import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.RoleRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
-import org.eclipse.edc.spi.monitor.Monitor;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -317,69 +318,42 @@ public class KeycloakUserService {
         try {
             RealmResource realm = keycloak.realm(realmName);
             
-            // Try to get realm roles list first (for validation)
-            List<RoleRepresentation> rolesToAssign;
-            try {
-                List<RoleRepresentation> realmRoles = realm.roles().list();
-                // Filter roles that exist in Keycloak
-                rolesToAssign = realmRoles.stream()
-                        .filter(role -> roles.contains(role.getName()))
-                        .collect(Collectors.toList());
-                
-                // Log warning for roles that don't exist
-                List<String> assignedRoleNames = rolesToAssign.stream()
-                        .map(RoleRepresentation::getName)
-                        .collect(Collectors.toList());
-                List<String> missingRoles = roles.stream()
-                        .filter(role -> !assignedRoleNames.contains(role))
-                        .collect(Collectors.toList());
-                
-                if (!missingRoles.isEmpty()) {
-                    monitor.warning("Roles not found in Keycloak (will be ignored): " + String.join(", ", missingRoles));
-                }
-            } catch (Exception e) {
-                // If we can't list roles (403 Forbidden), try to assign directly
-                String errorMsg = e.getMessage();
-                if (errorMsg != null && (errorMsg.contains("403") || errorMsg.contains("Forbidden"))) {
-                    monitor.debug("Cannot list roles (403 Forbidden), attempting direct role assignment");
-                    // Try to assign roles directly without validation
-                    rolesToAssign = roles.stream()
-                            .map(roleName -> {
-                                RoleRepresentation role = new RoleRepresentation();
-                                role.setName(roleName);
-                                return role;
-                            })
-                            .collect(Collectors.toList());
-                } else {
-                    throw e; // Re-throw if it's a different error
+            // Fetch roles individually by name to avoid requiring view-realm permission
+            List<RoleRepresentation> rolesToAssign = new ArrayList<>();
+            List<String> missingRoles = new ArrayList<>();
+            
+            for (String roleName : roles) {
+                try {
+                    RoleRepresentation role = realm.roles().get(roleName).toRepresentation();
+                    rolesToAssign.add(role);
+                } catch (NotFoundException e) {
+                    missingRoles.add(roleName);
+                    monitor.debug("Role not found in Keycloak: " + roleName);
+                } catch (Exception e) {
+                    monitor.warning("Failed to fetch role '" + roleName + "': " + e.getMessage());
+                    missingRoles.add(roleName);
                 }
             }
             
-            // Assign roles to user
             if (!rolesToAssign.isEmpty()) {
                 userResource.roles().realmLevel().add(rolesToAssign);
                 monitor.debug("Assigned roles to user: " + rolesToAssign.stream()
-                        .map(RoleRepresentation::getName)
+                        .map(org.keycloak.representations.idm.RoleRepresentation::getName)
                         .collect(Collectors.joining(", ")));
+            }
+            
+            if (!missingRoles.isEmpty()) {
+                monitor.warning("Roles not found in Keycloak (will be ignored): " + String.join(", ", missingRoles));
             }
             
         } catch (Exception e) {
             monitor.warning("Failed to assign roles to user: " + e.getMessage(), e);
-            // Don't fail user creation/update if role assignment fails
+            // Don't fail user creation if role assignment fails
         }
     }
 
     /**
      * Get all available realm roles
-     * 
-     * Note: This requires the Keycloak admin client to have "view-realm-roles" permission.
-     * If you get a 403 Forbidden error, you need to:
-     * 1. Go to Keycloak Admin Console
-     * 2. Navigate to Clients -> [your-admin-client] -> Service Account Roles
-     * 3. Assign the "realm-management" client role "view-realm-roles" or "realm-admin"
-     * 
-     * As a fallback, if direct role listing fails, this method will attempt to extract
-     * unique roles from all users' assigned roles.
      */
     public Result<List<RoleRepresentation>> getRealmRoles() {
         try {
@@ -390,70 +364,8 @@ public class KeycloakUserService {
             return Result.success(roles);
 
         } catch (Exception e) {
-            String errorMsg = e.getMessage();
-            // Check if this is a 403 Forbidden error (permission denied)
-            if (errorMsg != null && (errorMsg.contains("403") || errorMsg.contains("Forbidden"))) {
-                monitor.warning("Direct role listing failed with 403 Forbidden. Attempting fallback method to extract roles from users.");
-                return getRealmRolesFromUsers();
-            }
-            
-            monitor.severe("Failed to get realm roles: " + errorMsg, e);
-            return Result.failure("Failed to get realm roles: " + errorMsg + 
-                    ". Ensure the Keycloak admin client has 'view-realm-roles' permission.");
-        }
-    }
-
-    /**
-     * Fallback method: Extract unique realm roles from all users' assigned roles.
-     * This works even if the client doesn't have direct permission to list roles,
-     * as long as it can view users and their role assignments.
-     */
-    private Result<List<RoleRepresentation>> getRealmRolesFromUsers() {
-        try {
-            RealmResource realm = keycloak.realm(realmName);
-            UsersResource usersResource = realm.users();
-            
-            // Get all users
-            List<UserRepresentation> users = usersResource.list(0, 100); // Limit to first 100 users
-            
-            // Collect unique role names from all users
-            java.util.Set<String> uniqueRoleNames = new java.util.HashSet<>();
-            
-            for (UserRepresentation user : users) {
-                try {
-                    UserResource userResource = usersResource.get(user.getId());
-                    List<RoleRepresentation> userRoles = userResource.roles().realmLevel().listAll();
-                    userRoles.forEach(role -> uniqueRoleNames.add(role.getName()));
-                } catch (Exception e) {
-                    monitor.debug("Could not fetch roles for user " + user.getId() + ": " + e.getMessage());
-                    // Continue with other users
-                }
-            }
-            
-            // Convert role names to RoleRepresentation objects
-            // Note: We only have names, not full role details, but this is better than nothing
-            List<RoleRepresentation> roles = uniqueRoleNames.stream()
-                    .map(roleName -> {
-                        RoleRepresentation role = new RoleRepresentation();
-                        role.setName(roleName);
-                        // Try to get full role details if possible
-                        try {
-                            RoleRepresentation fullRole = realm.roles().get(roleName).toRepresentation();
-                            return fullRole;
-                        } catch (Exception e) {
-                            // If we can't get full details, return basic role with just name
-                            return role;
-                        }
-                    })
-                    .collect(Collectors.toList());
-            
-            monitor.info("Retrieved " + roles.size() + " realm roles using fallback method (extracted from users)");
-            return Result.success(roles);
-            
-        } catch (Exception e) {
-            monitor.severe("Fallback method also failed to get realm roles: " + e.getMessage(), e);
-            return Result.failure("Failed to get realm roles. Direct listing requires 'view-realm-roles' permission. " +
-                    "Fallback method also failed: " + e.getMessage());
+            monitor.severe("Failed to get realm roles: " + e.getMessage(), e);
+            return Result.failure("Failed to get realm roles: " + e.getMessage());
         }
     }
 

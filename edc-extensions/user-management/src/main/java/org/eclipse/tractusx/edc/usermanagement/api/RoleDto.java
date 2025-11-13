@@ -30,20 +30,17 @@ public class RoleDto {
     private final String name;
     private final String description;
     private final Boolean composite;
-//    private final Boolean clientRole;
 
     @JsonCreator
     public RoleDto(@JsonProperty("id") String id,
                    @JsonProperty("name") String name,
                    @JsonProperty("description") String description,
                    @JsonProperty("composite") Boolean composite
-//                   @JsonProperty("clientRole") Boolean clientRole
     ) {
         this.id = id;
         this.name = name;
         this.description = description;
         this.composite = composite;
-//        this.clientRole = clientRole;
     }
 
     public String getId() {
@@ -61,9 +58,5 @@ public class RoleDto {
     public Boolean getComposite() {
         return composite;
     }
-
-//    public Boolean getClientRole() {
-//        return clientRole;
-//    }
 }
 

@@ -18,9 +18,13 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.jakartaAnnotation)
     implementation(libs.nimbus.jwt)
-    implementation("org.keycloak:keycloak-admin-client:25.0.0")
-    implementation("org.jboss.resteasy:resteasy-client:6.2.9.Final")
-    implementation("org.jboss.resteasy:resteasy-client-api:6.2.9.Final")
-    implementation("org.jboss.resteasy:resteasy-jackson2-provider:6.2.9.Final")
+//    implementation("org.keycloak:keycloak-admin-client:25.0.0")
+    implementation(libs.keycloak)
+//    implementation("org.jboss.resteasy:resteasy-client:6.2.9.Final")
+    implementation(libs.rest.easy.client)
+//    implementation("org.jboss.resteasy:resteasy-client-api:6.2.9.Final")
+    implementation(libs.rest.easy.client.api)
+//    implementation("org.jboss.resteasy:resteasy-jackson2-provider:6.2.9.Final")
+    implementation(libs.rest.easy.client.jackson)
 }
 
