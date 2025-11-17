@@ -109,7 +109,6 @@ public class UserManagementExtension implements ServiceExtension {
             throw new IllegalStateException("Keycloak client secret is required");
         }
 
-        // Create Keycloak user service
         KeycloakUserService userService = new KeycloakUserService(
                 serverUrl,
                 realmName,

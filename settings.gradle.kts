@@ -174,3 +174,4 @@ buildCache {
 
 include("edc-extensions:trusted-issuers-hot-reload")
 include("edc-extensions:user-management")
+include("edc-extensions:gateway")

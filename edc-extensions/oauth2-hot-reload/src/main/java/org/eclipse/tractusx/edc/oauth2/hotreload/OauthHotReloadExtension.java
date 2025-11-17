@@ -156,7 +156,6 @@ public class OauthHotReloadExtension implements ServiceExtension {
      * (Note: This requires EDC to be restarted to pick up changes, so less useful)
      */
     private void monitorConfigViaContext(ServiceExtensionContext context) {
-        // Try multiple possible property names for compatibility
         String jwksUrl = getJwksUrlFromContext(context);
         String audience = getAudienceFromContext(context);
 
