@@ -31,6 +31,7 @@ dependencies {
 
     implementation(project(":core:core-utils"))
     implementation(libs.edc.spi.core)
+    implementation(project(":edc-extensions:dynamic-trust-reloader"))
 
     testImplementation(libs.edc.junit)
     testImplementation(libs.edc.lib.boot)
@@ -44,4 +45,10 @@ tasks.withType<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar> {
 
 application {
     mainClass.set("org.eclipse.edc.boot.system.runtime.BaseRuntime")
+
+    applicationDefaultJvmArgs = listOf(
+        "-Dedc.fs.config=${project.rootDir}/configuration/config.properties",
+        "-Dedc.keystore=",
+        "-Dedc.keystore.password="
+    )
 }
