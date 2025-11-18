@@ -58,7 +58,7 @@ public class ReloadableX509TrustManager implements X509TrustManager {
      * @return  X509TrustManager
      */
     private X509TrustManager requireDelegate() {
-        X509TrustManager trustManager = delegateRef.get();
+        X509TrustManager trustManager = getCurrentDelegate();
         if (trustManager == null) {
             throw new IllegalStateException("No delegate X509TrustManager is configured");
         }
