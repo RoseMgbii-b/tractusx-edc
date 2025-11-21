@@ -152,7 +152,7 @@ public class SqlAuditStore implements AuditStore {
     }
 
     private List<Object> buildQueryParams(AuditQuery query) {
-        var params = new ArrayList<>();
+        var params = new ArrayList<Object>();
         
         if (query.getEventType() != null) {
             params.add(query.getEventType().name());
