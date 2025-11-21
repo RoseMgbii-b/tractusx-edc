@@ -37,6 +37,7 @@ include(":spi:core-spi")
 include(":spi:tokenrefresh-spi")
 include(":spi:bdrs-client-spi")
 include(":spi:dataflow-spi")
+include(":spi:audit-registry-spi")
 
 
 // core modules
@@ -70,6 +71,11 @@ include(":edc-extensions:validators:empty-asset-selector")
 include(":edc-extensions:log4j2-monitor")
 include("edc-extensions:connector-discovery:connector-discovery-api")
 include(":edc-extensions:dataspace-protocol")
+
+// audit registry extensions
+include(":edc-extensions:audit-registry:audit-store-sql")
+include(":edc-extensions:audit-registry:audit-registry-core")
+include(":edc-extensions:audit-registry:audit-event-subscriber")
 
 include(":edc-extensions:agreements")
 include(":edc-extensions:agreements:retirement-evaluation-core")
