@@ -16,18 +16,32 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
-plugins {
-    `java-library`
-}
 
-dependencies {
-    implementation(libs.edc.spi.web)
-    implementation(libs.edc.core.controlplane)
+package org.eclipse.tractusx.gateway;
 
-    testImplementation(libs.edc.junit)
-    testImplementation("org.mockito:mockito-junit-jupiter:5.12.0")
-}
+import java.time.Instant;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
-tasks.test {
-    useJUnitPlatform()
+public class RequestWindow {
+    private final List<Instant> requests = new CopyOnWriteArrayList<>();
+    private final Long defaultWindowSeconds;
+
+    public RequestWindow(Long defaultWindowSeconds) {
+        this.defaultWindowSeconds = defaultWindowSeconds;
+    }
+
+    void addRequest(Instant timestamp) {
+        requests.add(timestamp);
+    }
+
+    void removeOldEntries(Long windowSeconds) {
+        var cutoff = Instant.now().minusSeconds(windowSeconds);
+        requests.removeIf(timestamp -> timestamp.isBefore(cutoff));
+    }
+
+    int getRequestCount() {
+        return requests.size();
+    }
+
 }

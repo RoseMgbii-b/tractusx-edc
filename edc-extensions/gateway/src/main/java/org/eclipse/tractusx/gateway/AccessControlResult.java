@@ -16,18 +16,36 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
-plugins {
-    `java-library`
+
+package org.eclipse.tractusx.gateway;
+
+/**
+ * Result of access control evaluation.
+ */
+public class AccessControlResult {
+    private final boolean allowed;
+    private final String reason;
+    
+    private AccessControlResult(boolean allowed, String reason) {
+        this.allowed = allowed;
+        this.reason = reason;
+    }
+    
+    public static AccessControlResult allowed(String reason) {
+        return new AccessControlResult(true, reason);
+    }
+    
+    public static AccessControlResult denied(String reason) {
+        return new AccessControlResult(false, reason);
+    }
+    
+    public boolean isAllowed() {
+        return allowed;
+    }
+    
+    public String getReason() {
+        return reason;
+    }
 }
 
-dependencies {
-    implementation(libs.edc.spi.web)
-    implementation(libs.edc.core.controlplane)
 
-    testImplementation(libs.edc.junit)
-    testImplementation("org.mockito:mockito-junit-jupiter:5.12.0")
-}
-
-tasks.test {
-    useJUnitPlatform()
-}

@@ -37,7 +37,7 @@ This guide explains how to implement an **Access Control Gateway** extension in 
 │  EDC Connector - Access Control Gateway Extension              │
 │                                                                  │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │  AccessControlFilter (ContainerRequestFilter)            │  │
+│  │  GatewayFilter (ContainerRequestFilter)                  │  │
 │  │  • Intercepts ALL incoming requests                      │  │
 │  │  • Checks IP whitelist/blacklist                          │  │
 │  │  • Validates rate limits                                  │  │
@@ -48,7 +48,7 @@ This guide explains how to implement an **Access Control Gateway** extension in 
 │  └──────────────────────────────────────────────────────────┘  │
 │                          ↓                                       │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │  AccessControlService                                    │  │
+│  │  GatewayService                                          │  │
 │  │  • Rate limit tracking (per IP/user)                    │  │
 │  │  • IP validation logic                                   │  │
 │  │  • Request validation rules                             │  │
@@ -94,21 +94,21 @@ This guide explains how to implement an **Access Control Gateway** extension in 
 │  └──────────────────────────────────────────────────────────┘  │
 │                          ↓                                       │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │  AccessControlGatewayExtension                            │  │
+│  │  GatewayExtension                                         │  │
 │  │  • Registers filters for all API contexts                │  │
-│  │  • Configures AccessControlService                       │  │
+│  │  • Configures GatewayService                             │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                          ↓                                       │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │  AccessControlFilter (ContainerRequestFilter)             │  │
+│  │  GatewayFilter (ContainerRequestFilter)                  │  │
 │  │  • filter(ContainerRequestContext)                        │  │
 │  │  • Extracts: IP, path, headers, user info                 │  │
-│  │  • Calls AccessControlService                             │  │
-│  │  • Returns 429 (rate limit) or 403 (blocked) if rejected   │  │
+│  │  • Calls GatewayService                                   │  │
+│  │  • Returns 429 (rate limit) or 403 (blocked) if rejected │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                          ↓                                       │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │  AccessControlService                                    │  │
+│  │  GatewayService                                          │  │
 │  │  • isIpAllowed(String ip)                                │  │
 │  │  • checkRateLimit(String identifier)                     │  │
 │  │  • validateRequest(RequestInfo)                          │  │
@@ -137,28 +137,30 @@ This guide explains how to implement an **Access Control Gateway** extension in 
 
 ```
 edc-extensions/
-└── access-control-gateway/
+└── gateway/
     ├── build.gradle.kts
     ├── src/
     │   ├── main/
     │   │   ├── java/
-    │   │   │   └── org/eclipse/tractusx/edc/gateway/
-    │   │   │       ├── AccessControlGatewayExtension.java
-    │   │   │       ├── AccessControlFilter.java
-    │   │   │       ├── AccessControlService.java
+    │   │   │   └── org/eclipse/tractusx/gateway/
+    │   │   │       ├── GatewayExtension.java
+    │   │   │       ├── GatewayFilter.java
+    │   │   │       ├── GatewayService.java
     │   │   │       ├── RateLimitStore.java
     │   │   │       ├── InMemoryRateLimitStore.java
-    │   │   │       └── RequestInfo.java
+    │   │   │       ├── RequestInfo.java
+    │   │   │       ├── RequestWindow.java
+    │   │   │       └── AccessControlResult.java
     │   │   └── resources/
     │   │       └── META-INF/
     │   │           └── services/
     │   │               └── org.eclipse.edc.spi.system.ServiceExtension
     │   └── test/
     │       └── java/
-    │           └── org/eclipse/tractusx/edc/gateway/
-    │               ├── AccessControlFilterTest.java
-    │               ├── AccessControlServiceTest.java
-    │               └── AccessControlGatewayExtensionTest.java
+    │           └── org/eclipse/tractusx/gateway/
+    │               ├── GatewayFilterTest.java
+    │               ├── GatewayServiceTest.java
+    │               └── GatewayExtensionTest.java
     └── README.md
 ```
 
@@ -171,9 +173,9 @@ edc-extensions/
 Create the directory structure:
 
 ```bash
-mkdir -p edc-extensions/access-control-gateway/src/main/java/org/eclipse/tractusx/edc/gateway
-mkdir -p edc-extensions/access-control-gateway/src/main/resources/META-INF/services
-mkdir -p edc-extensions/access-control-gateway/src/test/java/org/eclipse/tractusx/edc/gateway
+mkdir -p edc-extensions/gateway/src/main/java/org/eclipse/tractusx/gateway
+mkdir -p edc-extensions/gateway/src/main/resources/META-INF/services
+mkdir -p edc-extensions/gateway/src/test/java/org/eclipse/tractusx/gateway
 ```
 
 ### Step 2: Create build.gradle.kts
@@ -238,7 +240,7 @@ edcBuild {
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-package org.eclipse.tractusx.edc.gateway;
+package org.eclipse.tractusx.gateway;
 
 import java.time.Instant;
 import java.util.Map;
@@ -255,12 +257,12 @@ public class RequestInfo {
     private final String userIdentifier; // From JWT token if available
 
     public RequestInfo(String clientIp, String path, String method, 
-                      Map<String, String> headers, String userIdentifier) {
+                      Map<String, String> headers, Instant timestamp, String userIdentifier) {
         this.clientIp = clientIp;
         this.path = path;
         this.method = method;
         this.headers = headers;
-        this.timestamp = Instant.now();
+        this.timestamp = timestamp;
         this.userIdentifier = userIdentifier;
     }
 
@@ -312,7 +314,7 @@ public class RequestInfo {
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-package org.eclipse.tractusx.edc.gateway;
+package org.eclipse.tractusx.gateway;
 
 /**
  * Stores and tracks rate limit information for clients.
@@ -327,7 +329,7 @@ public interface RateLimitStore {
      * @param windowSeconds Time window in seconds
      * @return true if request is allowed, false if rate limit exceeded
      */
-    boolean checkRateLimit(String identifier, int maxRequests, int windowSeconds);
+    boolean checkRateLimit(String identifier, Long maxRequests, Long windowSeconds);
     
     /**
      * Records a request for rate limiting purposes.
@@ -369,7 +371,7 @@ public interface RateLimitStore {
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-package org.eclipse.tractusx.edc.gateway;
+package org.eclipse.tractusx.gateway;
 
 import java.time.Instant;
 import java.util.Map;
@@ -392,7 +394,7 @@ public class InMemoryRateLimitStore implements RateLimitStore {
     }
     
     @Override
-    public boolean checkRateLimit(String identifier, int maxRequests, int windowSeconds) {
+    public boolean checkRateLimit(String identifier, Long maxRequests, Long windowSeconds) {
         var window = requestWindows.computeIfAbsent(identifier, 
             k -> new RequestWindow(windowSeconds));
         
@@ -404,7 +406,7 @@ public class InMemoryRateLimitStore implements RateLimitStore {
     @Override
     public void recordRequest(String identifier) {
         var window = requestWindows.computeIfAbsent(identifier, 
-            k -> new RequestWindow(60)); // Default 60 second window
+            k -> new RequestWindow(60L)); // Default 60 second window
         
         window.addRequest(Instant.now());
     }
@@ -415,43 +417,21 @@ public class InMemoryRateLimitStore implements RateLimitStore {
         if (window == null) {
             return 0;
         }
-        window.removeOldEntries(windowSeconds);
+        window.removeOldEntries((long) windowSeconds);
         return window.getRequestCount();
     }
     
     private void cleanup() {
         var now = Instant.now();
         requestWindows.entrySet().removeIf(entry -> {
-            entry.getValue().removeOldEntries(300); // 5 minute cleanup window
+            entry.getValue().removeOldEntries(300L); // 5 minute cleanup window
             return entry.getValue().getRequestCount() == 0;
         });
-    }
-    
-    private static class RequestWindow {
-        private final java.util.List<Instant> requests = new java.util.concurrent.CopyOnWriteArrayList<>();
-        private final int defaultWindowSeconds;
-        
-        RequestWindow(int defaultWindowSeconds) {
-            this.defaultWindowSeconds = defaultWindowSeconds;
-        }
-        
-        void addRequest(Instant timestamp) {
-            requests.add(timestamp);
-        }
-        
-        void removeOldEntries(int windowSeconds) {
-            var cutoff = Instant.now().minusSeconds(windowSeconds);
-            requests.removeIf(timestamp -> timestamp.isBefore(cutoff));
-        }
-        
-        int getRequestCount() {
-            return requests.size();
-        }
     }
 }
 ```
 
-### Step 6: Create AccessControlService
+### Step 6: Create RequestWindow
 
 ```java
 /********************************************************************************
@@ -473,12 +453,115 @@ public class InMemoryRateLimitStore implements RateLimitStore {
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-package org.eclipse.tractusx.edc.gateway;
+package org.eclipse.tractusx.gateway;
+
+import java.time.Instant;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+public class RequestWindow {
+    private final java.util.List<Instant> requests = new CopyOnWriteArrayList<>();
+    private final Long defaultWindowSeconds;
+
+    public RequestWindow(Long defaultWindowSeconds) {
+        this.defaultWindowSeconds = defaultWindowSeconds;
+    }
+
+    void addRequest(Instant timestamp) {
+        requests.add(timestamp);
+    }
+
+    void removeOldEntries(Long windowSeconds) {
+        var cutoff = Instant.now().minusSeconds(windowSeconds);
+        requests.removeIf(timestamp -> timestamp.isBefore(cutoff));
+    }
+
+    int getRequestCount() {
+        return requests.size();
+    }
+}
+```
+
+### Step 7: Create AccessControlResult
+
+```java
+/********************************************************************************
+ * Copyright (c) 2025 Contributors to the Eclipse Foundation
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information regarding copyright ownership.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ********************************************************************************/
+
+package org.eclipse.tractusx.gateway;
+
+/**
+ * Result of access control evaluation.
+ */
+public class AccessControlResult {
+    private final boolean allowed;
+    private final String reason;
+    
+    private AccessControlResult(boolean allowed, String reason) {
+        this.allowed = allowed;
+        this.reason = reason;
+    }
+    
+    public static AccessControlResult allowed(String reason) {
+        return new AccessControlResult(true, reason);
+    }
+    
+    public static AccessControlResult denied(String reason) {
+        return new AccessControlResult(false, reason);
+    }
+    
+    public boolean isAllowed() {
+        return allowed;
+    }
+    
+    public String getReason() {
+        return reason;
+    }
+}
+```
+
+### Step 8: Create GatewayService
+
+```java
+/********************************************************************************
+ * Copyright (c) 2025 Contributors to the Eclipse Foundation
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information regarding copyright ownership.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ********************************************************************************/
+
+package org.eclipse.tractusx.gateway;
 
 import org.eclipse.edc.spi.monitor.Monitor;
 import org.eclipse.edc.spi.system.configuration.Config;
 
-import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -486,18 +569,18 @@ import java.util.stream.Stream;
 /**
  * Service that evaluates access control rules for incoming requests.
  */
-public class AccessControlService {
+public class GatewayService {
     
     private final RateLimitStore rateLimitStore;
     private final Monitor monitor;
     private final Set<String> ipWhitelist;
     private final Set<String> ipBlacklist;
-    private final int maxRequestsPerMinute;
-    private final int maxRequestsPerHour;
-    private final long maxRequestSizeBytes;
+    private final Long maxRequestsPerMinute;
+    private final Long maxRequestsPerHour;
+    private final Long maxRequestSizeBytes;
     private final boolean enabled;
     
-    public AccessControlService(RateLimitStore rateLimitStore, Monitor monitor, Config config) {
+    public GatewayService(RateLimitStore rateLimitStore, Monitor monitor, Config config) {
         this.rateLimitStore = rateLimitStore;
         this.monitor = monitor;
         this.enabled = config.getBoolean("edc.gateway.enabled", true);
@@ -507,11 +590,11 @@ public class AccessControlService {
         this.ipBlacklist = parseIpList(config.getString("edc.gateway.ip.blacklist", ""));
         
         // Rate limiting
-        this.maxRequestsPerMinute = config.getInt("edc.gateway.rate.limit.per.minute", 100);
-        this.maxRequestsPerHour = config.getInt("edc.gateway.rate.limit.per.hour", 1000);
+        this.maxRequestsPerMinute = config.getLong("edc.gateway.rate.limit.per.minute", 100L);
+        this.maxRequestsPerHour = config.getLong("edc.gateway.rate.limit.per.hour", 1000L);
         
         // Request size
-        this.maxRequestSizeBytes = config.getLong("edc.gateway.request.max.size.bytes", 10 * 1024 * 1024); // 10MB default
+        this.maxRequestSizeBytes = config.getLong("edc.gateway.request.max.size.bytes", 10 * 1024 * 1024L); // 10MB default
     }
     
     /**
@@ -543,13 +626,13 @@ public class AccessControlService {
             : requestInfo.getClientIp();
         
         // Per-minute limit
-        if (!rateLimitStore.checkRateLimit(identifier, maxRequestsPerMinute, 60)) {
+        if (!rateLimitStore.checkRateLimit(identifier, maxRequestsPerMinute, 60L)) {
             logAccess(requestInfo, false, "Rate limit exceeded (per minute)");
             return AccessControlResult.denied("Rate limit exceeded: too many requests per minute");
         }
         
         // Per-hour limit
-        if (!rateLimitStore.checkRateLimit(identifier, maxRequestsPerHour, 3600)) {
+        if (!rateLimitStore.checkRateLimit(identifier, maxRequestsPerHour, 3600L)) {
             logAccess(requestInfo, false, "Rate limit exceeded (per hour)");
             return AccessControlResult.denied("Rate limit exceeded: too many requests per hour");
         }
@@ -573,52 +656,23 @@ public class AccessControlService {
     
     private void logAccess(RequestInfo requestInfo, boolean allowed, String reason) {
         if (allowed) {
-            monitor.debug("Access allowed: %s %s from %s - %s", 
+            monitor.debug(String.format("Access allowed: %s %s from %s - %s", 
                 requestInfo.getMethod(), 
                 requestInfo.getPath(), 
                 requestInfo.getClientIp(),
-                reason);
+                reason));
         } else {
-            monitor.warning("Access denied: %s %s from %s - %s", 
+            monitor.warning(String.format("Access denied: %s %s from %s - %s", 
                 requestInfo.getMethod(), 
                 requestInfo.getPath(), 
                 requestInfo.getClientIp(),
-                reason);
-        }
-    }
-    
-    /**
-     * Result of access control evaluation.
-     */
-    public static class AccessControlResult {
-        private final boolean allowed;
-        private final String reason;
-        
-        private AccessControlResult(boolean allowed, String reason) {
-            this.allowed = allowed;
-            this.reason = reason;
-        }
-        
-        public static AccessControlResult allowed(String reason) {
-            return new AccessControlResult(true, reason);
-        }
-        
-        public static AccessControlResult denied(String reason) {
-            return new AccessControlResult(false, reason);
-        }
-        
-        public boolean isAllowed() {
-            return allowed;
-        }
-        
-        public String getReason() {
-            return reason;
+                reason));
         }
     }
 }
 ```
 
-### Step 7: Create AccessControlFilter
+### Step 9: Create GatewayFilter
 
 ```java
 /********************************************************************************
@@ -640,7 +694,7 @@ public class AccessControlService {
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-package org.eclipse.tractusx.edc.gateway;
+package org.eclipse.tractusx.gateway;
 
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerRequestFilter;
@@ -648,25 +702,26 @@ import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.edc.spi.monitor.Monitor;
 
+import java.io.IOException;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * JAX-RS filter that intercepts all HTTP requests and applies access control.
  */
-public class AccessControlFilter implements ContainerRequestFilter {
+public class GatewayFilter implements ContainerRequestFilter {
     
-    private final AccessControlService accessControlService;
+    private final GatewayService gatewayService;
     private final Monitor monitor;
     
-    public AccessControlFilter(AccessControlService accessControlService, Monitor monitor) {
-        this.accessControlService = accessControlService;
+    public GatewayFilter(GatewayService gatewayService, Monitor monitor) {
+        this.gatewayService = gatewayService;
         this.monitor = monitor;
     }
     
     @Override
-    public void filter(ContainerRequestContext requestContext) {
+    public void filter(ContainerRequestContext requestContext) throws IOException {
         try {
             // Extract request information
             String clientIp = extractClientIp(requestContext);
@@ -681,16 +736,17 @@ public class AccessControlFilter implements ContainerRequestFilter {
                 path, 
                 method, 
                 headers, 
+                Instant.now(),
                 userIdentifier
             );
             
             // Evaluate access control
-            AccessControlService.AccessControlResult result = 
-                accessControlService.evaluateRequest(requestInfo);
+            AccessControlResult result = 
+                gatewayService.evaluateRequest(requestInfo);
             
             // Block request if denied
             if (!result.isAllowed()) {
-                monitor.warning("Access denied: %s - %s", requestInfo.getPath(), result.getReason());
+                monitor.warning(String.format("Access denied: %s - %s", requestInfo.getPath(), result.getReason()));
                 requestContext.abortWith(
                     Response.status(Response.Status.FORBIDDEN)
                         .entity(Map.of("error", result.getReason()))
@@ -700,33 +756,52 @@ public class AccessControlFilter implements ContainerRequestFilter {
             }
             
             // Request allowed, continue processing
-            monitor.debug("Access allowed: %s %s from %s", method, path, clientIp);
+            monitor.debug(String.format("Access allowed: %s %s from %s", method, path, clientIp));
             
         } catch (Exception e) {
-            monitor.severe("Error in access control filter", e);
+            monitor.severe("Error in access control filter: " + e.getMessage(), e);
             // On error, allow request (fail open) - you may want to change this to fail closed
-            monitor.warning("Access control error, allowing request: %s", e.getMessage());
+            monitor.warning(String.format("Access control error, allowing request: %s", e.getMessage()));
         }
     }
     
-    private String extractClientIp(ContainerRequestContext requestContext) {
+@Context
+private HttpServletRequest servletRequest;
+
+private String extractClientIp(ContainerRequestContext requestContext) {
         // Check X-Forwarded-For header (for proxies/load balancers)
         String xForwardedFor = requestContext.getHeaderString("X-Forwarded-For");
         if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
             // Take the first IP (original client)
             return xForwardedFor.split(",")[0].trim();
         }
-        
+
         // Check X-Real-IP header
         String xRealIp = requestContext.getHeaderString("X-Real-IP");
         if (xRealIp != null && !xRealIp.isEmpty()) {
             return xRealIp;
         }
-        
-        // Fallback to remote address
+
+        if (servletRequest != null) {
+            String forwarded = servletRequest.getHeader("X-Forwarded-For");
+            if (forwarded != null && !forwarded.isBlank()) {
+                return forwarded.split(",")[0].trim();
+            }
+            String realIp = servletRequest.getHeader("X-Real-IP");
+            if (realIp != null && !realIp.isBlank()) {
+                return realIp.trim();
+            }
+            return servletRequest.getRemoteAddr();
+        }
+
+        // Last resort fallbacks
+        if (requestContext.getProperty("jakarta.servlet.http.HttpServletRequest") instanceof HttpServletRequest req) {
+            return req.getRemoteAddr();
+        }
+
         return requestContext.getSecurityContext().getUserPrincipal() != null
-            ? requestContext.getSecurityContext().getUserPrincipal().getName()
-            : "unknown";
+                ? requestContext.getSecurityContext().getUserPrincipal().getName()
+                : "unknown";
     }
     
     private Map<String, String> extractHeaders(ContainerRequestContext requestContext) {
@@ -758,7 +833,7 @@ public class AccessControlFilter implements ContainerRequestFilter {
 }
 ```
 
-### Step 8: Create AccessControlGatewayExtension
+### Step 10: Create GatewayExtension
 
 ```java
 /********************************************************************************
@@ -780,7 +855,7 @@ public class AccessControlFilter implements ContainerRequestFilter {
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-package org.eclipse.tractusx.edc.gateway;
+package org.eclipse.tractusx.gateway;
 
 import org.eclipse.edc.runtime.metamodel.annotation.Extension;
 import org.eclipse.edc.runtime.metamodel.annotation.Inject;
@@ -796,7 +871,7 @@ import org.eclipse.edc.web.spi.configuration.ApiContext;
  * Extension that provides access control gateway functionality.
  */
 @Extension("Access Control Gateway")
-public class AccessControlGatewayExtension implements ServiceExtension {
+public class GatewayExtension implements ServiceExtension {
     
     @Inject
     private WebService webService;
@@ -828,14 +903,14 @@ public class AccessControlGatewayExtension implements ServiceExtension {
         RateLimitStore rateLimitStore = new InMemoryRateLimitStore();
         
         // Create access control service
-        AccessControlService accessControlService = new AccessControlService(
+        GatewayService gatewayService = new GatewayService(
             rateLimitStore, 
             monitor, 
             config
         );
         
         // Create and register filter for all API contexts
-        AccessControlFilter filter = new AccessControlFilter(accessControlService, monitor);
+        GatewayFilter filter = new GatewayFilter(gatewayService, monitor);
         
         // Register filter for all API contexts
         registerFilterForContext(ApiContext.PROTOCOL, filter);
@@ -846,34 +921,34 @@ public class AccessControlGatewayExtension implements ServiceExtension {
         monitor.info("Access Control Gateway initialized and active");
     }
     
-    private void registerFilterForContext(String apiContext, AccessControlFilter filter) {
+    private void registerFilterForContext(String apiContext, GatewayFilter filter) {
         try {
             webService.registerResource(apiContext, filter);
-            monitor.debug("Access control filter registered for context: %s", apiContext);
+            monitor.debug(String.format("Access control filter registered for context: %s", apiContext));
         } catch (Exception e) {
-            monitor.warning("Failed to register access control filter for context %s: %s", 
-                apiContext, e.getMessage());
+            monitor.warning(String.format("Failed to register access control filter for context %s: %s", 
+                apiContext, e.getMessage()));
         }
     }
 }
 ```
 
-### Step 9: Create Service Extension Registration File
+### Step 11: Create Service Extension Registration File
 
 Create `src/main/resources/META-INF/services/org.eclipse.edc.spi.system.ServiceExtension`:
 
 ```
-org.eclipse.tractusx.edc.gateway.AccessControlGatewayExtension
+org.eclipse.tractusx.gateway.GatewayExtension
 ```
 
-### Step 10: Add Extension to Control Plane
+### Step 12: Add Extension to Control Plane
 
 Edit `edc-controlplane/edc-controlplane-base/build.gradle.kts`:
 
 ```kotlin
 dependencies {
     // ... existing dependencies ...
-    implementation(project(":edc-extensions:access-control-gateway"))
+    implementation(project(":edc-extensions:gateway"))
 }
 ```
 
@@ -897,8 +972,8 @@ edc.gateway.ip.blacklist=192.168.1.100,10.0.0.50
 edc.gateway.rate.limit.per.minute=100
 edc.gateway.rate.limit.per.hour=1000
 
-# Request size limits (in bytes)
-edc.gateway.request.max.size.bytes=10485760  # 10MB
+# Request size limits (in bytes) - 10MB default
+edc.gateway.request.max.size.bytes=10485760
 ```
 
 ### Environment Variables
@@ -913,66 +988,177 @@ export EDC_GATEWAY_RATE_LIMIT_PER_MINUTE=100
 
 ---
 
-## 🧪 Testing
+## 🧪 Unit Testing Guide
 
-### Unit Tests
+The gateway extension should follow the same testing discipline that made the “old” extensions (everything under `edc-extensions` that predates this guide) reliable. Use those modules as a reference implementation, not new experiments.
 
-Create test files following the pattern:
+### What to copy from existing extensions
+
+- `edc-extensions/token-interceptor/src/test/java/.../AuthRequestFilterTest.java` shows how to mock `ContainerRequestContext` + `UriInfo` for JAX-RS filters.
+- `edc-extensions/token-interceptor/src/test/java/.../ProtocolFilterExtensionTest.java` demonstrates using `DependencyInjectionExtension` to bootstrap a `ServiceExtension` and verify `WebService.registerResource(...)`.
+- `edc-extensions/tokenrefresh-handler/src/test/java/.../TokenRefreshHandlerImplTest.java` highlights Arrange‑Act‑Assert structure, AssertJ + `AbstractResultAssert`, and exhaustive error-path coverage.
+- `edc-extensions/validators/empty-asset-selector/.../EmptyAssetSelectorValidatorTest.java` (and similar validators) provide a template for parameterized tests to document rule matrices.
+- `edc-extensions/bdrs-client/.../BdrsClientImplTest.java` shows how to isolate asynchronous helpers using mocks/fakes instead of touching the network.
+
+### Tooling & Gradle setup
+
+Add the standard test dependencies to `edc-extensions/gateway/build.gradle.kts` if they are not already present:
+
+```kotlin
+dependencies {
+    testImplementation(libs.junit.jupiter.api)
+    testRuntimeOnly(libs.junit.jupiter.engine)
+    testImplementation(libs.mockito.core)
+    testImplementation(libs.mockito.junit)
+    testImplementation(libs.assertj.core)
+    testImplementation(libs.edc.junit) // DependencyInjectionExtension, custom assertions
+}
+```
+
+Run tests locally with:
+
+```bash
+./gradlew :edc-extensions:gateway:test
+```
+
+### Directory & naming conventions
+
+```
+edc-extensions/gateway/src/test/java/org/eclipse/tractusx/gateway/
+├── GatewayServiceTest.java
+├── GatewayFilterTest.java
+├── GatewayExtensionTest.java
+└── InMemoryRateLimitStoreTest.java
+```
+
+Match class names 1:1 with the production type being verified, keep packages identical to simplify future moves, and keep helper fakes in the same test package (package-private).
+
+### GatewayServiceTest (business logic)
+
+Goals:
+- Verify allow/deny decisions for every rule (enable switch, IP lists, rate limits, request size, logging).
+- Prove that `rateLimitStore.checkRateLimit` and `recordRequest` are called with the correct identifier (user vs. IP).
+
+How:
+1. Use `@ExtendWith(MockitoExtension.class)`.
+2. Mock `RateLimitStore`, `Monitor`, and `Config`.
+3. Build `RequestInfo` via a builder/helper to avoid duplication.
+4. Stub config getters exactly as the production constructor uses them:
 
 ```java
 @ExtendWith(MockitoExtension.class)
-class AccessControlFilterTest {
-    
-    @Mock
-    private AccessControlService accessControlService;
-    
-    @Mock
-    private Monitor monitor;
-    
-    @Mock
-    private ContainerRequestContext requestContext;
-    
-    private AccessControlFilter filter;
-    
+class GatewayServiceTest {
+
+    @Mock private RateLimitStore store;
+    @Mock private Monitor monitor;
+    @Mock private Config config;
+
+    private GatewayService service;
+
     @BeforeEach
     void setUp() {
-        filter = new AccessControlFilter(accessControlService, monitor);
+        when(config.getBoolean("edc.gateway.enabled", true)).thenReturn(true);
+        when(config.getString("edc.gateway.ip.whitelist", "")).thenReturn("");
+        when(config.getString("edc.gateway.ip.blacklist", "")).thenReturn("");
+        when(config.getLong("edc.gateway.rate.limit.per.minute", 100L)).thenReturn(2L);
+        when(config.getLong("edc.gateway.rate.limit.per.hour", 3600L)).thenReturn(5L);
+        when(config.getLong("edc.gateway.request.max.size.bytes", 10 * 1024 * 1024L)).thenReturn(1024L);
+
+        service = new GatewayService(store, monitor, config);
     }
-    
+
     @Test
-    void filter_shouldAllowRequest_whenAccessControlAllows() {
-        // Test implementation
+    void evaluateRequest_whenRateLimitExceeded_shouldDeny() {
+        when(store.checkRateLimit("10.0.0.5", 2L, 60L)).thenReturn(false);
+
+        var result = service.evaluateRequest(request("10.0.0.5"));
+
+        assertThat(result.isAllowed()).isFalse();
+        assertThat(result.getReason()).contains("Rate limit");
+        verify(store).checkRateLimit("10.0.0.5", 2L, 60L);
+        verify(store, never()).recordRequest(anyString());
     }
-    
-    @Test
-    void filter_shouldBlockRequest_whenAccessControlDenies() {
-        // Test implementation
+
+    private RequestInfo request(String ip) {
+        return new RequestInfo(ip, "/api/assets", "GET", Map.of(), Instant.now(), null);
     }
 }
 ```
 
-### Integration Testing
+Mirror additional scenarios from the table below:
 
-Test the extension in an end-to-end test:
+| Scenario | Expectations |
+| --- | --- |
+| Disabled gateway | Returns allowed immediately, store never touched |
+| Blacklisted IP | Denied, no rate limit calls |
+| Whitelist present | Denied when IP missing, log warning |
+| Authenticated user | Identifier comes from `userIdentifier` |
+| Happy path | Both rate limits checked, `recordRequest` called once |
+
+### GatewayFilterTest (JAX-RS layer)
+
+Model it after `AuthRequestFilterTest`:
+- Mock `ContainerRequestContext`, `UriInfo`, and `HttpHeaders`.
+- Use `Instant.now()` freely—logic is synchronous.
+- Verify `requestContext.abortWith(...)` contains status `403` and reason from `AccessControlResult`.
+- Provide a helper to build `AccessControlResult` stubs (`when(service.evaluateRequest(any())).thenReturn(AccessControlResult.denied("..."))`).
+- Cover X-Forwarded-For parsing, header extraction, and fail-open logging branch (simulate `gatewayService` throwing).
+
+### InMemoryRateLimitStoreTest (stateful helper)
+
+Pattern:
+- Use real instance (no mocks) and advance `Instant` deterministically by injecting a clock supplier. Because the production class currently calls `Instant.now()`, expose a package-private constructor in tests (e.g., `InMemoryRateLimitStore(Supplier<Instant> nowSupplier, ScheduledExecutorService executor)`). If you cannot change the production code, keep tests focused on observable behavior with small windows and `Thread.sleep` guarded by `Awaitility.await().atMost(Duration.ofMillis(200))`.
+- Verify `checkRateLimit` respects sliding windows by recording requests, sleeping past the window, and asserting the counter resets.
+
+### GatewayExtensionTest (wiring)
+
+Copy the approach from `ProtocolFilterExtensionTest`:
 
 ```java
-@EndToEndTest
-class AccessControlGatewayIntegrationTest {
-    
-    @Test
-    void shouldBlockRequest_whenRateLimitExceeded() {
-        // Make many requests quickly
-        // Verify 429 response
+@ExtendWith(DependencyInjectionExtension.class)
+class GatewayExtensionTest {
+
+    private final WebService webService = mock();
+
+    @BeforeEach
+    void setUp(ServiceExtensionContext context) {
+        context.registerService(WebService.class, webService);
     }
-    
+
     @Test
-    void shouldBlockRequest_whenIpBlacklisted() {
-        // Configure blacklist
-        // Make request from blacklisted IP
-        // Verify 403 response
+    void initialize_shouldRegisterFilterForAllContexts(GatewayExtension extension,
+            ServiceExtensionContext context) {
+        extension.initialize(context);
+
+        verify(webService, times(1)).registerResource(eq(ApiContext.PROTOCOL), any(GatewayFilter.class));
+        verify(webService, times(1)).registerResource(eq(ApiContext.MANAGEMENT), any(GatewayFilter.class));
+        verify(webService, times(1)).registerResource(eq(ApiContext.CONTROL), any(GatewayFilter.class));
+        verify(webService, times(1)).registerResource(eq(ApiContext.PUBLIC), any(GatewayFilter.class));
     }
 }
 ```
+
+`DependencyInjectionExtension` automatically instantiates `GatewayExtension`, injects registered services, and gives you a real `ServiceExtensionContext`.
+
+### Test data tips
+
+- Keep factory methods (e.g., `RequestInfoBuilder`) inside `src/test/java` to avoid polluting production.
+- For repeated config maps, create a `TestConfig` helper that wraps `Map<String, Object>` and implements `Config`.
+- Use `org.assertj.core.api.Assertions` for fluent checks and `org.eclipse.edc.junit.assertions.AbstractResultAssert` when testing `Result` types in future enhancements.
+- Log verifications: prefer `verify(monitor).warning(contains("IP blacklisted"))` over brittle exact messages.
+
+### Coverage checklist
+
+- [ ] All config toggles covered (enabled flag, whitelist, blacklist, limits).
+- [ ] Positive and negative rate-limit cases.
+- [ ] Filter extracts headers/IPs correctly and aborts with `403`/`429`.
+- [ ] Extension registers the filter in every API context and logs failures.
+- [ ] Rate limit store eviction validated.
+- [ ] Fail-open path documented (exception from `GatewayService` still lets the request pass but logs severity).
+
+### Integration Testing (optional but recommended)
+
+Once unit tests are green, add a lightweight integration scenario (e.g., spinning up an embedded Jetty with the filter) under `edc-tests` or `samples`. Keep integration tests separate so unit tests stay fast.
 
 ---
 
@@ -981,7 +1167,7 @@ class AccessControlGatewayIntegrationTest {
 ### Build the Extension
 
 ```bash
-./gradlew :edc-extensions:access-control-gateway:build
+./gradlew :edc-extensions:gateway:build
 ```
 
 ### Run with Extension
@@ -1007,9 +1193,11 @@ The extension is included in the Docker image automatically when you build:
 - [ ] Create module structure
 - [ ] Implement `RequestInfo` class
 - [ ] Implement `RateLimitStore` interface and `InMemoryRateLimitStore`
-- [ ] Implement `AccessControlService`
-- [ ] Implement `AccessControlFilter`
-- [ ] Implement `AccessControlGatewayExtension`
+- [ ] Implement `RequestWindow` class
+- [ ] Implement `AccessControlResult` class
+- [ ] Implement `GatewayService`
+- [ ] Implement `GatewayFilter`
+- [ ] Implement `GatewayExtension`
 - [ ] Create service extension registration file
 - [ ] Add extension to control plane dependencies
 - [ ] Write unit tests
