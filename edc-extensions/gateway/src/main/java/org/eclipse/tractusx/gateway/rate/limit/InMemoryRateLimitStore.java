@@ -17,7 +17,9 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-package org.eclipse.tractusx.gateway;
+package org.eclipse.tractusx.gateway.rate.limit;
+
+import org.eclipse.tractusx.gateway.model.RequestWindow;
 
 import java.time.Instant;
 import java.util.Map;

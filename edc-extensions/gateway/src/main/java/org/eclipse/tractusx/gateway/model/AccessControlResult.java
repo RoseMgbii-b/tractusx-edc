@@ -17,31 +17,35 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-package org.eclipse.tractusx.gateway;
+package org.eclipse.tractusx.gateway.model;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-
-public class RequestWindow {
-    private final List<Instant> requests = new CopyOnWriteArrayList<>();
-    private final Long defaultWindowSeconds;
-
-    public RequestWindow(Long defaultWindowSeconds) {
-        this.defaultWindowSeconds = defaultWindowSeconds;
+/**
+ * Result of access control evaluation.
+ */
+public class AccessControlResult {
+    private final boolean allowed;
+    private final String reason;
+    
+    private AccessControlResult(boolean allowed, String reason) {
+        this.allowed = allowed;
+        this.reason = reason;
     }
-
-    void addRequest(Instant timestamp) {
-        requests.add(timestamp);
+    
+    public static AccessControlResult allowed(String reason) {
+        return new AccessControlResult(true, reason);
     }
-
-    void removeOldEntries(Long windowSeconds) {
-        var cutoff = Instant.now().minusSeconds(windowSeconds);
-        requests.removeIf(timestamp -> timestamp.isBefore(cutoff));
+    
+    public static AccessControlResult denied(String reason) {
+        return new AccessControlResult(false, reason);
     }
-
-    int getRequestCount() {
-        return requests.size();
+    
+    public boolean isAllowed() {
+        return allowed;
     }
-
+    
+    public String getReason() {
+        return reason;
+    }
 }
+
+

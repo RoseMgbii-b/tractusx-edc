@@ -22,5 +22,9 @@ dependencies {
     implementation(libs.rest.easy.client)
     implementation(libs.rest.easy.client.api)
     implementation(libs.rest.easy.client.jackson)
+
+    testImplementation(libs.edc.junit)
+    testImplementation(libs.mockito.junit.jupiter)
+    testRuntimeOnly(libs.jersey.common)
 }
 

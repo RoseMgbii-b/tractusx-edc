@@ -3,7 +3,7 @@ import org.eclipse.edc.spi.system.ServiceExtensionContext;
 import org.eclipse.edc.web.spi.WebService;
 import org.eclipse.edc.web.spi.configuration.ApiContext;
 import org.eclipse.tractusx.gateway.GatewayExtension;
-import org.eclipse.tractusx.gateway.GatewayFilter;
+import org.eclipse.tractusx.gateway.filter.GatewayFilter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

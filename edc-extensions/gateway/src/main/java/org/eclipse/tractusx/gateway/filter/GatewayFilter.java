@@ -17,7 +17,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-package org.eclipse.tractusx.gateway;
+package org.eclipse.tractusx.gateway.filter;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.container.ContainerRequestContext;
@@ -26,6 +26,9 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.edc.spi.monitor.Monitor;
+import org.eclipse.tractusx.gateway.model.AccessControlResult;
+import org.eclipse.tractusx.gateway.model.RequestInfo;
+import org.eclipse.tractusx.gateway.service.GatewayService;
 
 import java.io.IOException;
 import java.time.Instant;

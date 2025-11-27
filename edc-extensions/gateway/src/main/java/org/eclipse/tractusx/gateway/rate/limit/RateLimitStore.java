@@ -17,7 +17,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-package org.eclipse.tractusx.gateway;
+package org.eclipse.tractusx.gateway.rate.limit;
 
 public interface RateLimitStore {
 

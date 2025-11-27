@@ -1,8 +1,8 @@
 import org.eclipse.edc.spi.monitor.Monitor;
 import org.eclipse.edc.spi.system.configuration.Config;
-import org.eclipse.tractusx.gateway.GatewayService;
-import org.eclipse.tractusx.gateway.RateLimitStore;
-import org.eclipse.tractusx.gateway.RequestInfo;
+import org.eclipse.tractusx.gateway.service.GatewayService;
+import org.eclipse.tractusx.gateway.rate.limit.RateLimitStore;
+import org.eclipse.tractusx.gateway.model.RequestInfo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

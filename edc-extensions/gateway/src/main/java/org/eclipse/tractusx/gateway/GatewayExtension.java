@@ -28,6 +28,10 @@ import org.eclipse.edc.spi.system.ServiceExtensionContext;
 import org.eclipse.edc.spi.system.configuration.Config;
 import org.eclipse.edc.web.spi.WebService;
 import org.eclipse.edc.web.spi.configuration.ApiContext;
+import org.eclipse.tractusx.gateway.filter.GatewayFilter;
+import org.eclipse.tractusx.gateway.rate.limit.InMemoryRateLimitStore;
+import org.eclipse.tractusx.gateway.rate.limit.RateLimitStore;
+import org.eclipse.tractusx.gateway.service.GatewayService;
 
 @Extension("Access Control Gateway")
 public class GatewayExtension implements ServiceExtension {

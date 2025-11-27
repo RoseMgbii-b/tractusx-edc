@@ -1,4 +1,4 @@
-import org.eclipse.tractusx.gateway.InMemoryRateLimitStore;
+import org.eclipse.tractusx.gateway.rate.limit.InMemoryRateLimitStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

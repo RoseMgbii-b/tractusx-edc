@@ -16,5 +16,9 @@ dependencies {
     implementation(libs.jakarta.rsApi)
     implementation(libs.jakartaAnnotation)
     implementation(libs.nimbus.jwt)
+
+    testImplementation(libs.edc.junit)
+    testImplementation(libs.mockito.junit.jupiter)
+    testRuntimeOnly(libs.jersey.common)
 }
 

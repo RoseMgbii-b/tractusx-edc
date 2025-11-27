@@ -17,10 +17,13 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-package org.eclipse.tractusx.gateway;
+package org.eclipse.tractusx.gateway.service;
 
 import org.eclipse.edc.spi.monitor.Monitor;
 import org.eclipse.edc.spi.system.configuration.Config;
+import org.eclipse.tractusx.gateway.model.AccessControlResult;
+import org.eclipse.tractusx.gateway.model.RequestInfo;
+import org.eclipse.tractusx.gateway.rate.limit.RateLimitStore;
 
 import java.util.Set;
 import java.util.stream.Collectors;
