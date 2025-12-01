@@ -35,16 +35,16 @@ class UserManagementExtensionTest {
     }
 
 //    @Test
-//    void initialize_shouldRegisterController_whenConfigProvided() throws Exception {
-//        mockConfigValues();
-//
-//        try (MockedConstruction<KeycloakUserService> ignored = mockConstruction(KeycloakUserService.class)) {
-//            extension.initialize(context);
-//
-//            verify(webService).registerResource(eq(ApiContext.MANAGEMENT), isA(UserManagementApiController.class));
-//            verify(monitor).info(contains("User Management Extension started successfully"));
-//        }
-//    }
+    void initialize_shouldRegisterController_whenConfigProvided() throws Exception {
+        mockConfigValues();
+
+        try (MockedConstruction<KeycloakUserService> ignored = mockConstruction(KeycloakUserService.class)) {
+            extension.initialize(context);
+
+            verify(webService).registerResource(eq(ApiContext.MANAGEMENT), isA(UserManagementApiController.class));
+            verify(monitor).info(contains("User Management Extension started successfully"));
+        }
+    }
 
     @Test
     void initialize_shouldFallbackToIssuer_whenServerAndRealmMissing() throws Exception {
