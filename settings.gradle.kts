@@ -37,7 +37,7 @@ include(":spi:core-spi")
 include(":spi:tokenrefresh-spi")
 include(":spi:bdrs-client-spi")
 include(":spi:dataflow-spi")
-include(":spi:audit-registry-spi")
+include(":spi:audit-spi")
 
 
 // core modules
@@ -54,7 +54,6 @@ include(":edc-extensions:bpn-validation:business-partner-store-sql")
 include(":edc-extensions:migrations:postgresql-migration-lib")
 include(":edc-extensions:migrations:control-plane-migration")
 include(":edc-extensions:migrations:data-plane-migration")
-include(":edc-extensions:migrations:audit-migration")
 include(":edc-extensions:tokenrefresh-handler")
 include(":edc-extensions:bdrs-client")
 include(":edc-extensions:provision-additional-headers")
@@ -74,11 +73,7 @@ include("edc-extensions:connector-discovery:connector-discovery-api")
 include(":edc-extensions:dataspace-protocol")
 include(":edc-extensions:dynamic-trust-reloader")
 
-// audit registry extensions
-include(":edc-extensions:audit-registry:audit-store-sql")
-include(":edc-extensions:audit-registry:audit-registry-core")
-include(":edc-extensions:audit-registry:audit-event-subscriber")
-
+include(":edc-extensions:audit")
 include(":edc-extensions:agreements")
 include(":edc-extensions:agreements:retirement-evaluation-core")
 include(":edc-extensions:agreements:retirement-evaluation-api")
@@ -138,6 +133,7 @@ include(":edc-controlplane")
 include(":edc-controlplane:edc-controlplane-base")
 include(":edc-controlplane:edc-runtime-memory")
 include(":edc-controlplane:edc-controlplane-postgresql-hashicorp-vault")
+include(":edc-custom-launcher")
 
 // modules for dataplane artifacts
 include(":edc-dataplane")
