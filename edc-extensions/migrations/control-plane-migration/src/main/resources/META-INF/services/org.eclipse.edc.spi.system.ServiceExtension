@@ -32,3 +32,4 @@ org.eclipse.tractusx.edc.postgresql.migration.PolicyMonitorPostgresqlMigrationEx
 org.eclipse.tractusx.edc.postgresql.migration.PolicyPostgresqlMigrationExtension
 org.eclipse.tractusx.edc.postgresql.migration.TransferProcessPostgresqlMigrationExtension
 org.eclipse.tractusx.edc.postgresql.migration.AgreementBpnsPostgresqlMigrationExtension
+org.eclipse.tractusx.edc.postgresql.migration.AuditPostgresqlMigrationExtension
