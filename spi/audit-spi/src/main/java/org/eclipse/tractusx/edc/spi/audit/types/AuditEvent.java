@@ -11,15 +11,14 @@ import java.util.Objects;
  * Constructed and populated by the AuditEventSubscriber when an auditable action occurs.
  */
 public class AuditEvent {
-    private String id;                           // *UUID
-    private Instant timestamp;                   // *Time event occurred
-    private AuditEventCategory category;         // *CONTRACT_NEGOTIATION, TRANSFER_PROCESS, CONTRACT_AGREEMENT, etc.
-    private AuditEventName eventName;            // *The specific event name eg: TRANSFER_PROCESS_REQUESTED
+    private String id;                           // UUID
+    private Instant timestamp;                   // Time event occurred
+    private AuditEventCategory category;         // CONTRACT_NEGOTIATION, TRANSFER_PROCESS, CONTRACT_AGREEMENT, etc.
+    private AuditEventName eventName;            // The specific event name eg: TRANSFER_PROCESS_REQUESTED
     private String description;                  // Details about the event
-    private AuditOutcome outcome;                // *SUCCESS, FAILURE, WARNING
-    private String actorId;                      // *User, connector Id, or system
-    private String subjectId;                    // *Domain object ID (contractId, etc)
-    private String validatorId;                  // iD of the component that validated the action
+    private AuditOutcome outcome;                // SUCCESS, FAILURE, WARNING
+    private String actorId;                      // User, connector Id, or system
+    private String subjectId;                    // Domain object ID (contractId, etc)
 
     private AuditEvent() {}
 
@@ -54,10 +53,6 @@ public class AuditEvent {
 
     public String getSubjectId() {
         return subjectId;
-    }
-
-    public String getValidatorId() {
-        return validatorId;
     }
 
     public static class Builder {
@@ -111,11 +106,6 @@ public class AuditEvent {
             return this;
         }
 
-        public Builder validatorId(String validatorId) {
-            event.validatorId = validatorId;
-            return this;
-        }
-
         public AuditEvent build() {
             Objects.requireNonNull(event.id, " AuditEvent.id is required");
             Objects.requireNonNull(event.timestamp, " AuditEvent.timestamp is required");
@@ -125,7 +115,6 @@ public class AuditEvent {
             return event;
         }
     }
-
 }
 
 
