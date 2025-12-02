@@ -35,14 +35,14 @@ runs:
   using: "composite"
   steps:
     - name: Download Allure results
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v6
       with:
         pattern: ${{ inputs.allure_results }}-*
         merge-multiple: true
         path: allure-results
 
     - name: Build Allure test report
-      uses: simple-elf/allure-report-action@v1.12
+      uses: simple-elf/allure-report-action@v1.13
       with:
         gh_pages: gh-pages
         allure_results: allure-results

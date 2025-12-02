@@ -46,13 +46,25 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
+
+    ###############################################
+    # Enable emulation for cross-arch builds
+    ###############################################
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+
+    ###############################################
+    # Use Docker Buildx (required for multi-arch)
+    ###############################################
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
     #####################
     # Login to DockerHub
     #####################
     - name: DockerHub login
-      uses: docker/login-action@v2
+      uses: docker/login-action@v3
       with:
         username: ${{ inputs.docker_user }}
         password: ${{ inputs.docker_token }}
@@ -72,7 +84,7 @@ runs:
     # Create SemVer or ref tags dependent of trigger event
     - name: Docker meta
       id: meta
-      uses: docker/metadata-action@v4
+      uses: docker/metadata-action@v5
       with:
         images: |
           ${{ inputs.namespace }}/${{ inputs.imagename }}
@@ -89,7 +101,7 @@ runs:
     # Build and push the image
     ###############################
     - name: Build and push
-      uses: docker/build-push-action@v3
+      uses: docker/build-push-action@v6
       with:
         context: ${{ inputs.rootDir }}
         file: ${{ inputs.rootDir }}/build/resources/docker/Dockerfile
@@ -98,6 +110,7 @@ runs:
           OTEL_JAR=build/resources/otel/opentelemetry-javaagent.jar
           ADDITIONAL_FILES=build/legal/*
         push: true
+        platforms: linux/amd64,linux/arm64
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
 
@@ -106,7 +119,7 @@ runs:
     # https://github.com/peter-evans/dockerhub-description
     ###############################
     - name: Update Docker Hub description
-      uses: peter-evans/dockerhub-description@v3
+      uses: peter-evans/dockerhub-description@v5
       with:
         readme-filepath: ${{ inputs.rootDir }}/notice.md
         username: ${{ inputs.docker_user }}

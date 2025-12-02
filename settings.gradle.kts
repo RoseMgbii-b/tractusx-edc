@@ -37,6 +37,7 @@ include(":spi:core-spi")
 include(":spi:tokenrefresh-spi")
 include(":spi:bdrs-client-spi")
 include(":spi:dataflow-spi")
+include(":spi:audit-spi")
 
 
 // core modules
@@ -70,7 +71,9 @@ include(":edc-extensions:validators:empty-asset-selector")
 include(":edc-extensions:log4j2-monitor")
 include("edc-extensions:connector-discovery:connector-discovery-api")
 include(":edc-extensions:dataspace-protocol")
+include(":edc-extensions:dynamic-trust-reloader")
 
+include(":edc-extensions:audit")
 include(":edc-extensions:agreements")
 include(":edc-extensions:agreements:retirement-evaluation-core")
 include(":edc-extensions:agreements:retirement-evaluation-api")
@@ -133,6 +136,7 @@ include(":edc-controlplane")
 include(":edc-controlplane:edc-controlplane-base")
 include(":edc-controlplane:edc-runtime-memory")
 include(":edc-controlplane:edc-controlplane-postgresql-hashicorp-vault")
+include(":edc-custom-launcher")
 
 // modules for dataplane artifacts
 include(":edc-dataplane")
