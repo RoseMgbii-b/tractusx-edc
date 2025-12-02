@@ -5,8 +5,6 @@ import org.eclipse.edc.spi.system.ServiceExtensionContext;
 import org.eclipse.edc.spi.system.configuration.Config;
 import org.eclipse.tractusx.edc.truststore.reload.reloaderwatcher.TrustStoreFileWatcher;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-
 import javax.net.ssl.X509TrustManager;
 import java.nio.file.Files;
 import java.nio.file.Path;
