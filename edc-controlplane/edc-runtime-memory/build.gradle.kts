@@ -32,6 +32,7 @@ dependencies {
     implementation(project(":core:core-utils"))
     implementation(libs.edc.spi.core)
     implementation(project(":edc-extensions:dynamic-trust-reloader"))
+    implementation(project(":edc-extensions:audit"))
 
     testImplementation(libs.edc.junit)
     testImplementation(libs.edc.lib.boot)
