@@ -63,9 +63,11 @@ dependencies {
     implementation(project(":edc-extensions:connector-discovery:connector-discovery-api"))
     implementation(project(":edc-extensions:dataspace-protocol"))
     implementation(project(":edc-extensions:token-interceptor"))
+    implementation(project(":edc-extensions:dynamic-trust-reloader"))
     implementation(project(":edc-extensions:oauth2-hot-reload"))
     implementation(project(":edc-extensions:user-management"))
     implementation(project(":edc-extensions:gateway"))
+
     runtimeOnly(project(":edc-extensions:event-subscriber"))
 
     runtimeOnly(libs.bundles.edc.monitoring)
