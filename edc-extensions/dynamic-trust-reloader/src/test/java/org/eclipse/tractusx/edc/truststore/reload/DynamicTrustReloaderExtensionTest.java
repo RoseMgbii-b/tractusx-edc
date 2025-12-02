@@ -1,0 +1,109 @@
+package org.eclipse.tractusx.edc.truststore.reload;
+
+import org.eclipse.edc.spi.monitor.Monitor;
+import org.eclipse.edc.spi.system.ServiceExtensionContext;
+import org.eclipse.edc.spi.system.configuration.Config;
+import org.eclipse.tractusx.edc.truststore.reload.reloaderwatcher.TrustStoreFileWatcher;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+import javax.net.ssl.X509TrustManager;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.KeyStore;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
+
+import static org.mockito.Mockito.*;
+
+class DynamicTrustReloaderExtensionTest {
+
+    @Test
+    void initialize_shouldSkipWhenPathMissing() {
+        var context = mock(ServiceExtensionContext.class);
+        var monitor = mock(Monitor.class);
+        var config = mock(Config.class);
+
+        when(context.getMonitor()).thenReturn(monitor);
+        when(context.getConfig()).thenReturn(config);
+        when(config.getString(eq("dynamic.truststore.path"), any())).thenReturn(null);
+
+        var reloaderExtension = new DynamicTrustReloaderExtension();
+        reloaderExtension.initialize(context);
+
+        verify(monitor).info(contains("skipping dynamic reload"));
+    }
+
+    @Test
+    void initialize_shouldStartWatcherAndRegisterServices() throws Exception {
+        // Create JKS truststore
+        KeyStore trustStore = KeyStore.getInstance("JKS");
+        trustStore.load(null, null);
+
+        X509Certificate cert = loadTestCertificate();
+        trustStore.setCertificateEntry("alias", cert);
+
+        Path store = Files.createTempFile("truststore", ".jks");
+        try (var storeOutputStream = Files.newOutputStream(store)) {
+            trustStore.store(storeOutputStream, "changeit".toCharArray());
+        }
+
+        // Mock context and config
+        var context = mock(ServiceExtensionContext.class);
+        var monitor = mock(Monitor.class);
+        var config = mock(Config.class);
+
+        when(context.getMonitor()).thenReturn(monitor);
+        when(context.getConfig()).thenReturn(config);
+
+        when(config.getString("dynamic.truststore.path", null)).thenReturn(store.toString());
+        when(config.getString("dynamic.truststore.type", "JKS")).thenReturn("JKS");
+        when(config.getString("dynamic.truststore.password", "")).thenReturn("changeit");
+
+        // 3. Initialize extension
+        var reloaderExtension = new DynamicTrustReloaderExtension();
+        reloaderExtension.initialize(context);
+
+        // 4. Validate registration
+        verify(context).registerService(eq(TrustStoreFileWatcher.class), any());
+        verify(context).registerService(eq(X509TrustManager.class), any());
+    }
+
+    // Utility method
+    private X509Certificate loadTestCertificate() throws Exception {
+        CertificateFactory factory = CertificateFactory.getInstance("X.509");
+
+        // using certificate authority certificate (check local-certs directory)
+        String pem = """
+-----BEGIN CERTIFICATE-----
+MIIDqDCCApCgAwIBAgIEPhwe6TANBgkqhkiG9w0BAQsFADBiMRswGQYDVQQDDBJ3
+d3cubW9ja3NlcnZlci5jb20xEzARBgNVBAoMCk1vY2tTZXJ2ZXIxDzANBgNVBAcM
+BkxvbmRvbjEQMA4GA1UECAwHRW5nbGFuZDELMAkGA1UEBhMCVUswIBcNMTYwNjIw
+MTYzNDE0WhgPMjExNzA1MjcxNjM0MTRaMGIxGzAZBgNVBAMMEnd3dy5tb2Nrc2Vy
+dmVyLmNvbTETMBEGA1UECgwKTW9ja1NlcnZlcjEPMA0GA1UEBwwGTG9uZG9uMRAw
+DgYDVQQIDAdFbmdsYW5kMQswCQYDVQQGEwJVSzCCASIwDQYJKoZIhvcNAQEBBQAD
+ggEPADCCAQoCggEBAPGORrdkwTY1H1dvQPYaA+RpD+pSbsvHTtUSU6H7NQS2qu1p
+sE6TEG2fE+Vb0QIXkeH+jjKzcfzHGCpIU/0qQCu4RVycrIW4CCdXjl+T3L4C0I3R
+mIMciTig5qcAvY9P5bQAdWDkU36YGrCjGaX3QlndGxD9M974JdpVK4cqFyc6N4gA
+Onys3uS8MMmSHTjTFAgR/WFeJiciQnal+Zy4ZF2x66CdjN+hP8ch2yH/CBwrSBc0
+ZeH2flbYGgkh3PwKEqATqhVa+mft4dCrvqBwGhBTnzEGWK/qrl9xB4mTs4GQ/Z5E
+8rXzlvpKzVJbfDHfqVzgFw4fQFGV0XMLTKyvOX0CAwEAAaNkMGIwHQYDVR0OBBYE
+FH3W3sL4XRDM/VnRayaSamVLISndMA8GA1UdEwEB/wQFMAMBAf8wCwYDVR0PBAQD
+AgG2MCMGA1UdJQQcMBoGCCsGAQUFBwMBBggrBgEFBQcDAgYEVR0lADANBgkqhkiG
+9w0BAQsFAAOCAQEAecfgKuMxCBe/NxVqoc4kzacf9rjgz2houvXdZU2UDBY3hCs4
+MBbM7U9Oi/3nAoU1zsA8Rg2nBwc76T8kSsfG1TK3iJkfGIOVjcwOoIjy3Z8zLM2V
+YjYbOUyAQdO/s2uShAmzzjh9SV2NKtcNNdoE9e6udvwDV8s3NGMTUpY5d7BHYQqV
+sqaPGlsKi8dN+gdLcRbtQo29bY8EYR5QJm7QJFDI1njODEnrUjjMvWw2yjFlje59
+j/7LBRe2wfNmjXFYm5GqWft10UJ7Ypb3XYoGwcDac+IUvrgmgTHD+E3klV3SUi8i
+Gm5MBedhPkXrLWmwuoMJd7tzARRHHT6PBH/ZGw==
+-----END CERTIFICATE-----
+""";
+
+        return (X509Certificate) factory.generateCertificate(
+                new java.io.ByteArrayInputStream(pem.getBytes())
+        );
+    }
+
+
+}
+
