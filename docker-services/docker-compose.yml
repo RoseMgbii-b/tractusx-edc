@@ -1,0 +1,106 @@
+services:
+  redis:
+    image: redis:7.2
+    container_name: redis_audit
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  flyway:
+    image: flyway/flyway:11.18.0
+    volumes:
+      - ../edc-extensions/migrations/control-plane-migration/src/main/resources/org/eclipse/tractusx/edc/postgresql/migration:/flyway/sql:ro
+    depends_on:
+      - postgres
+    command: [
+      "-url=jdbc:postgresql://postgres:5432/audit_log",
+      "-user=user",
+      "-password=me",
+      "-locations=filesystem:/flyway/sql",
+      "-connectRetries=60",
+      "migrate"
+    ]
+    restart: "no"
+
+  postgres:
+    image: postgres:17
+    container_name: postgres
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: me
+      POSTGRES_DB: audit_log
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d audit_log"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.2
+    container_name: es_audit
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    restart: unless-stopped
+    healthcheck:
+      disable: true
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.12.2
+    container_name: kibana_audit
+    ports:
+      - "5601:5601"
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+
+  es-template-init:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.2
+    container_name: es_template_init
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+    volumes:
+      - ./es-init:/init:ro
+    depends_on:
+        - elasticsearch
+    entrypoint: >
+        sh -c "
+        echo 'Waiting for Elasticsearch to become available on http://elasticsearch:9200 ...' &&
+        until curl -sSf http://elasticsearch:9200 >/dev/null 2>&1; do
+          echo 'Elasticsearch not ready — sleeping 3s';
+          sleep 3;
+        done &&
+        echo 'Elasticsearch is up — applying index templates...' &&
+        curl -s -X PUT 'http://elasticsearch:9200/_index_template/edc-logs-template' -H 'Content-Type: application/json' -d @/init/edc-logs-template.json &&
+        curl -s -X PUT 'http://elasticsearch:9200/_index_template/audit-events-template' -H 'Content-Type: application/json' -d @/init/audit-events-template.json &&
+        echo 'Elasticsearch index templates installed.' &&
+        exit 0
+        "
+    restart: "no"
+
+volumes:
+  pgdata:
+  esdata:
