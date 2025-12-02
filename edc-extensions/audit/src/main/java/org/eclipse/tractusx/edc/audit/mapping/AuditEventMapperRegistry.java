@@ -6,6 +6,7 @@ import org.eclipse.edc.connector.controlplane.contract.spi.event.contractnegotia
 import org.eclipse.edc.connector.controlplane.transfer.spi.event.*;
 import org.eclipse.edc.spi.event.Event;
 import org.eclipse.edc.spi.monitor.Monitor;
+import org.eclipse.tractusx.edc.audit.mapping.extractor.ReflectionExtractor;
 import org.eclipse.tractusx.edc.spi.audit.types.AuditEvent;
 import org.eclipse.tractusx.edc.spi.audit.types.AuditEventCategory;
 import org.eclipse.tractusx.edc.spi.audit.types.AuditEventName;
@@ -18,7 +19,6 @@ import org.eclipse.edc.connector.controlplane.policy.spi.event.PolicyDefinitionC
 import org.eclipse.edc.connector.controlplane.policy.spi.event.PolicyDefinitionUpdated;
 import org.eclipse.edc.connector.controlplane.policy.spi.event.PolicyDefinitionDeleted;
 
-
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
@@ -28,25 +28,22 @@ import java.util.function.BiConsumer;
 
 /**
  * The Audit Event Mapper Registry
- * Decides how specific event class are translated into an Audit Event
+ * Decides how specific event class are translated into Audit Event
+ * BiConsumer receives (event, builder) and fills in the audit fields.
  */
 public class AuditEventMapperRegistry {
-    /**
-     * Registry mapping concrete Event classes to mapping logic.
-     * The BiConsumer receives (event, builder) and fills in the audit fields.
-     */
     private final Map<Class<? extends Event>, BiConsumer<Event, AuditEvent.Builder>> handlers = new ConcurrentHashMap<>();
+    private final ReflectionExtractor extractor;
     private final Monitor monitor;
 
     public AuditEventMapperRegistry(Monitor monitor) {
         this.monitor = monitor;
+        this.extractor = new ReflectionExtractor(monitor);
         registerDefaultMappings();
     }
 
     /**
      * Entry point used by the subscriber
-     * @param event         the event
-     * @return              the optional audit event
      */
     public Optional<AuditEvent> map(Event event) {
         var handler = findHandler(event.getClass());
@@ -71,9 +68,12 @@ public class AuditEventMapperRegistry {
         }
     }
 
+    /**
+     * Resolves the most specific mapping handler for a given event type.
+     */
     BiConsumer<Event, AuditEvent.Builder> findHandler(Class<?> eventType) {
-        Class<?> current = eventType;
 
+        Class<?> current = eventType;
         while (current != null && current != Object.class) {
             var handler = handlers.get(current);
             if (handler != null) {
@@ -84,22 +84,32 @@ public class AuditEventMapperRegistry {
         return null;
     }
 
-    public <E extends Event> void register (Class<E> eventClass, BiConsumer<E, AuditEvent.Builder> consumer) {
+    /**
+     * Registers a mapping function for a specific event class.
+     */
+    public <E extends Event> void register(Class<E> eventClass, BiConsumer<E, AuditEvent.Builder> consumer) {
         handlers.put(eventClass, (Event e, AuditEvent.Builder b) -> consumer.accept(eventClass.cast(e), b));
+    }
+
+    /**
+     * Attempts to resolve a string value from an event by name
+     */
+    private String resolveProperty(Object payload, String fieldName) {
+        return extractor.extractStringProperty(payload, fieldName);
     }
 
     /**
      * Registers concrete event mappings
      *
      */
-    private void registerDefaultMappings(){
+    private void registerDefaultMappings() {
         // CONTRACT NEGOTIATION
         register(ContractNegotiationInitiated.class, (event, b) -> b
                 .category(AuditEventCategory.CONTRACT_NEGOTIATION)
                 .eventName(AuditEventName.CONTRACT_NEGOTIATION_INITIATED)
                 .outcome(AuditOutcome.SUCCESS)
-                .subjectId(extractStringProperty(event, "contractNegotiationId"))
-                .actorId(extractStringProperty(event, "counterPartyId"))
+                .subjectId(resolveProperty(event, "contractNegotiationId"))
+                .actorId(resolveProperty(event, "counterPartyId"))
                 .description("Contract negotiation initiated.")
         );
 
@@ -107,8 +117,8 @@ public class AuditEventMapperRegistry {
                 .category(AuditEventCategory.CONTRACT_REQUEST)
                 .eventName(AuditEventName.CONTRACT_NEGOTIATION_REQUESTED)
                 .outcome(AuditOutcome.SUCCESS)
-                .subjectId(extractStringProperty(event, "contractNegotiationId"))
-                .actorId(extractStringProperty(event, "counterPartyId"))
+                .subjectId(resolveProperty(event, "contractNegotiationId"))
+                .actorId(resolveProperty(event, "counterPartyId"))
                 .description("Contract negotiation requested.")
         );
 
@@ -116,8 +126,8 @@ public class AuditEventMapperRegistry {
                 .category(AuditEventCategory.CONTRACT_NEGOTIATION)
                 .eventName(AuditEventName.CONTRACT_NEGOTIATION_OFFERED)
                 .outcome(AuditOutcome.SUCCESS)
-                .subjectId(extractStringProperty(event, "contractNegotiationId"))
-                .actorId(extractStringProperty(event, "counterPartyId"))
+                .subjectId(resolveProperty(event, "contractNegotiationId"))
+                .actorId(resolveProperty(event, "counterPartyId"))
                 .description("Contract negotiation offered.")
         );
 
@@ -125,8 +135,8 @@ public class AuditEventMapperRegistry {
                 .category(AuditEventCategory.CONTRACT_NEGOTIATION)
                 .eventName(AuditEventName.CONTRACT_NEGOTIATION_ACCEPTED)
                 .outcome(AuditOutcome.SUCCESS)
-                .subjectId(extractStringProperty(event, "contractNegotiationId"))
-                .actorId(extractStringProperty(event, "counterPartyId"))
+                .subjectId(resolveProperty(event, "contractNegotiationId"))
+                .actorId(resolveProperty(event, "counterPartyId"))
                 .description("Contract negotiation accepted.")
         );
 
@@ -134,8 +144,8 @@ public class AuditEventMapperRegistry {
                 .category(AuditEventCategory.CONTRACT_NEGOTIATION)
                 .eventName(AuditEventName.CONTRACT_NEGOTIATION_AGREED)
                 .outcome(AuditOutcome.SUCCESS)
-                .subjectId(extractStringProperty(event, "contractNegotiationId"))
-                .actorId(extractStringProperty(event, "counterPartyId"))
+                .subjectId(resolveProperty(event, "contractNegotiationId"))
+                .actorId(resolveProperty(event, "counterPartyId"))
                 .description("Contract negotiation agreed.")
         );
 
@@ -143,8 +153,8 @@ public class AuditEventMapperRegistry {
                 .category(AuditEventCategory.CONTRACT_VALIDATION)
                 .eventName(AuditEventName.CONTRACT_NEGOTIATION_FINALIZED)
                 .outcome(AuditOutcome.SUCCESS)
-                .subjectId(extractStringProperty(event, "contractNegotiationId"))
-                .actorId(extractStringProperty(event, "counterPartyId"))
+                .subjectId(resolveProperty(event, "contractNegotiationId"))
+                .actorId(resolveProperty(event, "counterPartyId"))
                 .description("Contract negotiation finalized (agreement created).")
         );
 
@@ -152,8 +162,8 @@ public class AuditEventMapperRegistry {
                 .category(AuditEventCategory.CONTRACT_VALIDATION)
                 .eventName(AuditEventName.CONTRACT_NEGOTIATION_VERIFIED)
                 .outcome(AuditOutcome.SUCCESS)
-                .subjectId(extractStringProperty(event, "contractNegotiationId"))
-                .actorId(extractStringProperty(event, "counterPartyId"))
+                .subjectId(resolveProperty(event, "contractNegotiationId"))
+                .actorId(resolveProperty(event, "counterPartyId"))
                 .description("Contract negotiation verified.")
         );
 
@@ -161,8 +171,8 @@ public class AuditEventMapperRegistry {
                 .category(AuditEventCategory.CONTRACT_NEGOTIATION)
                 .eventName(AuditEventName.CONTRACT_NEGOTIATION_TERMINATED)
                 .outcome(AuditOutcome.WARNING)
-                .subjectId(extractStringProperty(event, "contractNegotiationId"))
-                .actorId(extractStringProperty(event, "counterPartyId"))
+                .subjectId(resolveProperty(event, "contractNegotiationId"))
+                .actorId(resolveProperty(event, "counterPartyId"))
                 .description("Contract negotiation terminated.")
         );
 
@@ -171,7 +181,7 @@ public class AuditEventMapperRegistry {
                 .category(AuditEventCategory.CONTRACT_DEFINITION)
                 .eventName(AuditEventName.CONTRACT_DEFINITION_CREATED)
                 .outcome(AuditOutcome.SUCCESS)
-                .subjectId(extractStringProperty(event, "contractDefinitionId"))
+                .subjectId(resolveProperty(event, "contractDefinitionId"))
                 .description("Contract definition created.")
         );
 
@@ -179,7 +189,7 @@ public class AuditEventMapperRegistry {
                 .category(AuditEventCategory.CONTRACT_DEFINITION)
                 .eventName(AuditEventName.CONTRACT_DEFINITION_UPDATED)
                 .outcome(AuditOutcome.SUCCESS)
-                .subjectId(extractStringProperty(event, "contractDefinitionId"))
+                .subjectId(resolveProperty(event, "contractDefinitionId"))
                 .description("Contract definition updated.")
         );
 
@@ -188,7 +198,7 @@ public class AuditEventMapperRegistry {
                 .category(AuditEventCategory.ASSET)
                 .eventName(AuditEventName.ASSET_CREATED)
                 .outcome(AuditOutcome.SUCCESS)
-                .subjectId(extractStringProperty(event, "assetId"))
+                .subjectId(resolveProperty(event, "assetId"))
                 .description("Asset created.")
         );
 
@@ -196,7 +206,7 @@ public class AuditEventMapperRegistry {
                 .category(AuditEventCategory.ASSET)
                 .eventName(AuditEventName.ASSET_UPDATED)
                 .outcome(AuditOutcome.SUCCESS)
-                .subjectId(extractStringProperty(event, "assetId"))
+                .subjectId(resolveProperty(event, "assetId"))
                 .description("Asset updated.")
         );
 
@@ -204,7 +214,7 @@ public class AuditEventMapperRegistry {
                 .category(AuditEventCategory.ASSET)
                 .eventName(AuditEventName.ASSET_DELETED)
                 .outcome(AuditOutcome.SUCCESS)
-                .subjectId(extractStringProperty(event, "assetId"))
+                .subjectId(resolveProperty(event, "assetId"))
                 .description("Asset deleted.")
         );
 
@@ -213,7 +223,7 @@ public class AuditEventMapperRegistry {
                 .category(AuditEventCategory.TRANSFER_PROCESS)
                 .eventName(AuditEventName.TRANSFER_PROCESS_INITIATED)
                 .outcome(AuditOutcome.SUCCESS)
-                .subjectId(extractStringProperty(event, "transferProcessId"))
+                .subjectId(resolveProperty(event, "transferProcessId"))
                 .description("Transfer process initiated.")
         );
 
@@ -222,7 +232,7 @@ public class AuditEventMapperRegistry {
                 .category(AuditEventCategory.TRANSFER_PROCESS)
                 .eventName(AuditEventName.TRANSFER_PROCESS_REQUESTED)
                 .outcome(AuditOutcome.SUCCESS)
-                .subjectId(extractStringProperty(event, "transferProcessId"))
+                .subjectId(resolveProperty(event, "transferProcessId"))
                 .description("Transfer process requested.")
         );
 
@@ -230,7 +240,7 @@ public class AuditEventMapperRegistry {
                 .category(AuditEventCategory.TRANSFER_PROCESS)
                 .eventName(AuditEventName.TRANSFER_PROCESS_STARTED)
                 .outcome(AuditOutcome.SUCCESS)
-                .subjectId(extractStringProperty(event, "transferProcessId"))
+                .subjectId(resolveProperty(event, "transferProcessId"))
                 .description("Transfer process started.")
         );
 
@@ -238,7 +248,7 @@ public class AuditEventMapperRegistry {
                 .category(AuditEventCategory.TRANSFER_PROCESS)
                 .eventName(AuditEventName.TRANSFER_PROCESS_SUSPENDED)
                 .outcome(AuditOutcome.WARNING)
-                .subjectId(extractStringProperty(event, "transferProcessId"))
+                .subjectId(resolveProperty(event, "transferProcessId"))
                 .description("Transfer process suspended.")
         );
 
@@ -246,7 +256,7 @@ public class AuditEventMapperRegistry {
                 .category(AuditEventCategory.TRANSFER_PROCESS)
                 .eventName(AuditEventName.TRANSFER_PROCESS_TERMINATED)
                 .outcome(AuditOutcome.WARNING)
-                .subjectId(extractStringProperty(event, "transferProcessId"))
+                .subjectId(resolveProperty(event, "transferProcessId"))
                 .description("Transfer process terminated.")
         );
 
@@ -254,7 +264,7 @@ public class AuditEventMapperRegistry {
                 .category(AuditEventCategory.TRANSFER_PROCESS)
                 .eventName(AuditEventName.TRANSFER_PROCESS_PROVISIONING_REQUESTED)
                 .outcome(AuditOutcome.SUCCESS)
-                .subjectId(extractStringProperty(event, "transferProcessId"))
+                .subjectId(resolveProperty(event, "transferProcessId"))
                 .description("Transfer process provisioning requested.")
         );
 
@@ -262,7 +272,7 @@ public class AuditEventMapperRegistry {
                 .category(AuditEventCategory.TRANSFER_PROCESS)
                 .eventName(AuditEventName.TRANSFER_PROCESS_PROVISIONED)
                 .outcome(AuditOutcome.SUCCESS)
-                .subjectId(extractStringProperty(event, "transferProcessId"))
+                .subjectId(resolveProperty(event, "transferProcessId"))
                 .description("Transfer process provisioned.")
         );
 
@@ -270,7 +280,7 @@ public class AuditEventMapperRegistry {
                 .category(AuditEventCategory.TRANSFER_PROCESS)
                 .eventName(AuditEventName.TRANSFER_PROCESS_DEPROVISIONING_REQUESTED)
                 .outcome(AuditOutcome.SUCCESS)
-                .subjectId(extractStringProperty(event, "transferProcessId"))
+                .subjectId(resolveProperty(event, "transferProcessId"))
                 .description("Transfer process deprovisioning requested.")
         );
 
@@ -279,7 +289,7 @@ public class AuditEventMapperRegistry {
                 .category(AuditEventCategory.POLICY)
                 .eventName(AuditEventName.POLICY_DEFINITION_CREATED)
                 .outcome(AuditOutcome.SUCCESS)
-                .subjectId(extractStringProperty(event, "policyDefinitionId"))
+                .subjectId(resolveProperty(event, "policyDefinitionId"))
                 .description("Policy definition created.")
         );
 
@@ -287,7 +297,7 @@ public class AuditEventMapperRegistry {
                 .category(AuditEventCategory.POLICY)
                 .eventName(AuditEventName.POLICY_DEFINITION_UPDATED)
                 .outcome(AuditOutcome.SUCCESS)
-                .subjectId(extractStringProperty(event, "policyDefinitionId"))
+                .subjectId(resolveProperty(event, "policyDefinitionId"))
                 .description("Policy definition updated.")
         );
 
@@ -295,27 +305,9 @@ public class AuditEventMapperRegistry {
                 .category(AuditEventCategory.POLICY)
                 .eventName(AuditEventName.POLICY_DEFINITION_DELETED)
                 .outcome(AuditOutcome.SUCCESS)
-                .subjectId(extractStringProperty(event, "policyDefinitionId"))
+                .subjectId(resolveProperty(event, "policyDefinitionId"))
                 .description("Policy definition deleted.")
         );
     }
 
-    private String extractStringProperty(Object payload, String fieldName) {
-        try {
-            var methodName = "get" + capitalize(fieldName);
-            var method = payload.getClass().getDeclaredMethod(methodName);
-            method.setAccessible(true);
-            var value = method.invoke(payload);
-            return value != null ? value.toString() : null;
-        } catch (Exception ignored) {
-            return null;
-        }
-    }
-
-    private String capitalize(String fieldName) {
-        if (fieldName == null || fieldName.isEmpty()) {
-            return fieldName;
-        }
-        return Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
-    }
 }
