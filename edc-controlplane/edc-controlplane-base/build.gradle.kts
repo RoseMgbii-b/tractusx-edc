@@ -61,6 +61,8 @@ dependencies {
     implementation(project(":edc-extensions:dataspace-protocol"))
     implementation(project(":edc-extensions:token-interceptor"))
     implementation(project(":edc-extensions:dynamic-trust-reloader"))
+    implementation(project(":edc-extensions:audit"))
+    implementation(project(":edc-extensions:elasticsearch-monitor"))
 
     runtimeOnly(project(":edc-extensions:event-subscriber"))
 

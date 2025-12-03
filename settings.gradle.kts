@@ -74,6 +74,7 @@ include(":edc-extensions:dataspace-protocol")
 include(":edc-extensions:dynamic-trust-reloader")
 
 include(":edc-extensions:audit")
+include(":edc-extensions:elasticsearch-monitor")
 include(":edc-extensions:agreements")
 include(":edc-extensions:agreements:retirement-evaluation-core")
 include(":edc-extensions:agreements:retirement-evaluation-api")
