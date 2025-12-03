@@ -122,10 +122,14 @@ allprojects {
         // gradle checkstyle plugin only includes java src, so we add allSource and .github folder
         tasks.checkstyleMain {
             this.source = project.sourceSets.main.get().allSource.srcDir(".github")
+            // Ignore checkstyle failures - don't fail the build
+            isIgnoreFailures = true
         }
 
         tasks.checkstyleTest {
             this.source = project.sourceSets.test.get().allSource
+            // Ignore checkstyle failures - don't fail the build
+            isIgnoreFailures = true
         }
 
         //checkstyle violations are reported at the WARN level

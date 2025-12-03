@@ -24,7 +24,10 @@ plugins {
 }
 
 dependencies {
-    runtimeOnly(project(":edc-controlplane:edc-controlplane-base"))
+    runtimeOnly(project(":edc-controlplane:edc-controlplane-base")) {
+        // Exclude native DAC authentication to let the custom hot-reloadable OAuth implementation take over
+        exclude("org.eclipse.edc", "auth-delegated")
+    }
     runtimeOnly(project(":edc-dataplane:edc-dataplane-base")) {
         exclude("org.eclipse.edc", "data-plane-selector-client")
     }

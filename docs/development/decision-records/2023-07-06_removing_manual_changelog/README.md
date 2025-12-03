@@ -33,7 +33,7 @@ which caused the git histories of `main` and `releases` to diverge.
 This is also reflected in the automatically generated changelog, for
 example [0.5.0-rc5](https://github.com/eclipse-tractusx/tractusx-edc/releases/tag/0.5.0-rc5). Once that is fixed, we can
 delete the CHANGELOG.md file
-and [this GH action to update it (line 44)](../../../../.github/workflows/draft-new-release.yaml).
+and [this GH action to update it (line 44)](../../../../.github/workflowss/draft-new-release.yaml).
 
 ## NOTICE
 
