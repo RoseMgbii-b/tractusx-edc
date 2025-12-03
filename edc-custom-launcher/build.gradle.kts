@@ -18,15 +18,12 @@ dependencies {
     runtimeOnly(project(":edc-dataplane:edc-dataplane-base")) {
         exclude("org.eclipse.edc", "data-plane-selector-client")
     }
-    // IMPORTANT: Seed tx.edc.vault.secrets into InMemoryVault
     runtimeOnly(project(":edc-controlplane:edc-runtime-memory"))
 
-
-    // TOTAL SQL BOM (FIXES QueryExecutor / schema / dialect!)
     runtimeOnly(libs.edc.bom.controlplane.feature.sql)
     runtimeOnly(libs.edc.bom.federatedcatalog.feature.sql)
 
-    // SQL store modules needed by your audit, agreements, etc.
+    // SQL store modules needed by my audit
     runtimeOnly(project(":edc-extensions:agreements:retirement-evaluation-store-sql"))
     runtimeOnly(project(":edc-extensions:agreements-bpns:bpns-evaluation-store-sql"))
     runtimeOnly(project(":edc-extensions:bpn-validation:business-partner-store-sql"))
@@ -37,9 +34,10 @@ dependencies {
     runtimeOnly(project(":edc-extensions:migrations:control-plane-migration"))
     runtimeOnly(project(":edc-extensions:migrations:postgresql-migration-lib"))
 
-    // YOUR EXTENSIONS
+    // My Extensions
     implementation(project(":edc-extensions:audit"))
     implementation(project(":edc-extensions:dynamic-trust-reloader"))
+    implementation(project(":edc-extensions:elasticsearch-monitor"))
     implementation(project(":core:core-utils"))
     implementation(libs.edc.spi.core)
 
