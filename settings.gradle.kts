@@ -77,6 +77,7 @@ include(":edc-extensions:user-management")
 include(":edc-extensions:gateway")
 
 include(":edc-extensions:audit")
+include(":edc-extensions:elasticsearch-monitor")
 include(":edc-extensions:agreements")
 include(":edc-extensions:agreements:retirement-evaluation-core")
 include(":edc-extensions:agreements:retirement-evaluation-api")

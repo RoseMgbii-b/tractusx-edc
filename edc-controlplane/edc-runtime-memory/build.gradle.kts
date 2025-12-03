@@ -36,6 +36,7 @@ dependencies {
     implementation(libs.edc.spi.core)
     implementation(project(":edc-extensions:dynamic-trust-reloader"))
     implementation(project(":edc-extensions:audit"))
+    implementation(project(":edc-extensions:elasticsearch-monitor"))
 
     testImplementation(libs.edc.junit)
     testImplementation(libs.edc.lib.boot)

@@ -29,7 +29,7 @@ configurations.all {
 
     // identity-trust-sts-remote-client excluded because we have the tx-dcp-sts-dim that takes care to define the correct client in case of DIM
     exclude("org.eclipse.edc", "identity-trust-sts-remote-client")
-    
+
     // auth-delegated excluded to use custom hot-reloadable OAuth2 implementation instead
     exclude("org.eclipse.edc", "auth-delegated")
 }
@@ -64,6 +64,8 @@ dependencies {
     implementation(project(":edc-extensions:dataspace-protocol"))
     implementation(project(":edc-extensions:token-interceptor"))
     implementation(project(":edc-extensions:dynamic-trust-reloader"))
+    implementation(project(":edc-extensions:audit"))
+    implementation(project(":edc-extensions:elasticsearch-monitor"))
     implementation(project(":edc-extensions:oauth2-hot-reload"))
     implementation(project(":edc-extensions:user-management"))
     implementation(project(":edc-extensions:gateway"))
