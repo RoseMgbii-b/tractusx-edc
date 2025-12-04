@@ -130,6 +130,13 @@ public class HotReloadableJwtValidationFilter implements ContainerRequestFilter 
 
     @Override
     public void filter(ContainerRequestContext requestContext) throws IOException {
+        // Exclude token endpoint from authentication (it's used to GET tokens)
+        String path = requestContext.getUriInfo().getPath();
+        if (path != null && isTokenEndpoint(path)) {
+            monitor.debug("Skipping JWT validation for token endpoint: " + path);
+            return;
+        }
+
         // Check if validator is initialized
         if (jwtProcessor == null) {
             monitor.warning("JWT validator not initialized. Rejecting request.");
@@ -246,6 +253,20 @@ public class HotReloadableJwtValidationFilter implements ContainerRequestFilter 
         } finally {
             configLock.readLock().unlock();
         }
+    }
+
+    /**
+     * Check if the path is the token endpoint (should be excluded from authentication)
+     */
+    private boolean isTokenEndpoint(String path) {
+        if (path == null) {
+            return false;
+        }
+        // Normalize path (remove leading/trailing slashes)
+        String normalizedPath = path.startsWith("/") ? path.substring(1) : path;
+        normalizedPath = normalizedPath.endsWith("/") ? normalizedPath.substring(0, normalizedPath.length() - 1) : normalizedPath;
+        // Check for token endpoint
+        return normalizedPath.equals("v3/users/token") || normalizedPath.endsWith("/v3/users/token");
     }
 
     /**
