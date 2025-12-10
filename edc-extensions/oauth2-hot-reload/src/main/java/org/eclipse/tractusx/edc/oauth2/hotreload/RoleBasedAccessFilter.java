@@ -63,6 +63,12 @@ public class RoleBasedAccessFilter implements ContainerRequestFilter {
         monitor.debug("=== RBAC Filter Called ===");
         monitor.debug("Method: " + method + ", Path: " + path + ", Full URI: " + fullUri);
 
+        // Exclude token endpoint from role-based access control
+        if (path != null && isTokenEndpoint(path)) {
+            monitor.debug("Skipping RBAC check for token endpoint: " + path);
+            return;
+        }
+
         if ("GET".equals(method)) {
             monitor.debug("Skipping RBAC check for GET request");
             return;
@@ -112,6 +118,20 @@ public class RoleBasedAccessFilter implements ContainerRequestFilter {
         }
         // No specific rule for this path - allow it (or deny if you want explicit allow-list)
         monitor.debug("No RBAC rule for path: " + path + " - allowing by default");
+    }
+
+    /**
+     * Check if the path is the token endpoint (should be excluded from RBAC)
+     */
+    private boolean isTokenEndpoint(String path) {
+        if (path == null) {
+            return false;
+        }
+        // Normalize path (remove leading/trailing slashes)
+        String normalizedPath = path.startsWith("/") ? path.substring(1) : path;
+        normalizedPath = normalizedPath.endsWith("/") ? normalizedPath.substring(0, normalizedPath.length() - 1) : normalizedPath;
+        // Check for token endpoint
+        return normalizedPath.equals("v3/users/token") || normalizedPath.endsWith("/v3/users/token");
     }
 
     /**

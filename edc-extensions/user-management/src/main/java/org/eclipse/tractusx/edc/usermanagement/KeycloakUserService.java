@@ -19,8 +19,14 @@
 
 package org.eclipse.tractusx.edc.usermanagement;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.core.Response;
+import okhttp3.FormBody;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
 import org.eclipse.edc.spi.monitor.Monitor;
 import org.eclipse.edc.spi.result.Result;
 import org.keycloak.admin.client.Keycloak;
@@ -28,10 +34,12 @@ import org.keycloak.admin.client.KeycloakBuilder;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.admin.client.resource.UserResource;
 import org.keycloak.admin.client.resource.UsersResource;
+import org.eclipse.tractusx.edc.usermanagement.dto.TokenResponse;
 import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.RoleRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -42,13 +50,23 @@ import java.util.stream.Collectors;
 public class KeycloakUserService {
 
     private final Keycloak keycloak;
+    private final String serverUrl;
     private final String realmName;
+    private final String clientId;
+    private final String clientSecret;
     private final Monitor monitor;
+    private final OkHttpClient httpClient;
+    private final ObjectMapper objectMapper;
 
     public KeycloakUserService(String serverUrl, String realmName, String clientId, 
                                String clientSecret, Monitor monitor) {
+        this.serverUrl = serverUrl;
         this.realmName = realmName;
+        this.clientId = clientId;
+        this.clientSecret = clientSecret;
         this.monitor = monitor;
+        this.httpClient = new OkHttpClient();
+        this.objectMapper = new ObjectMapper();
         
         this.keycloak = KeycloakBuilder.builder()
                 .serverUrl(serverUrl)
@@ -366,6 +384,83 @@ public class KeycloakUserService {
         } catch (Exception e) {
             monitor.severe("Failed to get realm roles: " + e.getMessage(), e);
             return Result.failure("Failed to get realm roles: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Generate access token using password credentials grant (Resource Owner Password Credentials)
+     * 
+     * @param username The username
+     * @param password The password
+     * @return Result containing TokenResponse with access token, refresh token, etc.
+     */
+    public Result<TokenResponse> generateToken(String username, String password) {
+        try {
+            // Build the token endpoint URL
+            String tokenUrl = String.format("%s/realms/%s/protocol/openid-connect/token", 
+                    serverUrl, realmName);
+            
+            // Build form body for password credentials grant
+            RequestBody formBody = new FormBody.Builder()
+                    .add("grant_type", "password")
+                    .add("username", username)
+                    .add("password", password)
+                    .add("client_id", clientId)
+                    .add("client_secret", clientSecret)
+                    .build();
+            
+            // Create HTTP request
+            Request request = new Request.Builder()
+                    .url(tokenUrl)
+                    .post(formBody)
+                    .addHeader("Content-Type", "application/x-www-form-urlencoded")
+                    .build();
+            
+            // Execute request
+            try (okhttp3.Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful()) {
+                    String errorBody = response.body() != null ? response.body().string() : "No error details";
+                    monitor.warning("Failed to generate token for user '" + username + "'. Status: " + 
+                            response.code() + ", Error: " + errorBody);
+                    
+                    // Try to parse error message from response
+                    String errorMessage = "Authentication failed";
+                    try {
+                        JsonNode errorJson = objectMapper.readTree(errorBody);
+                        if (errorJson.has("error_description")) {
+                            errorMessage = errorJson.get("error_description").asText();
+                        } else if (errorJson.has("error")) {
+                            errorMessage = errorJson.get("error").asText();
+                        }
+                    } catch (Exception e) {
+                        // Use default error message
+                    }
+                    
+                    return Result.failure(errorMessage);
+                }
+                
+                // Parse successful response
+                String responseBody = response.body().string();
+                JsonNode tokenJson = objectMapper.readTree(responseBody);
+                
+                TokenResponse tokenResponse = new TokenResponse(
+                        tokenJson.has("access_token") ? tokenJson.get("access_token").asText() : null,
+                        tokenJson.has("refresh_token") ? tokenJson.get("refresh_token").asText() : null,
+                        tokenJson.has("token_type") ? tokenJson.get("token_type").asText() : "Bearer",
+                        tokenJson.has("expires_in") ? tokenJson.get("expires_in").asLong() : null,
+                        tokenJson.has("refresh_expires_in") ? tokenJson.get("refresh_expires_in").asLong() : null
+                );
+                
+                monitor.info("Token generated successfully for user: " + username);
+                return Result.success(tokenResponse);
+            }
+            
+        } catch (IOException e) {
+            monitor.severe("Failed to generate token: " + e.getMessage(), e);
+            return Result.failure("Failed to generate token: " + e.getMessage());
+        } catch (Exception e) {
+            monitor.severe("Unexpected error during token generation: " + e.getMessage(), e);
+            return Result.failure("Unexpected error during token generation: " + e.getMessage());
         }
     }
 

@@ -30,8 +30,10 @@ import jakarta.ws.rs.core.Response;
 import org.eclipse.edc.spi.monitor.Monitor;
 import org.eclipse.edc.spi.result.Result;
 import org.eclipse.tractusx.edc.usermanagement.dto.RoleDto;
+import org.eclipse.tractusx.edc.usermanagement.dto.TokenResponse;
 import org.eclipse.tractusx.edc.usermanagement.dto.UserDto;
 import org.eclipse.tractusx.edc.usermanagement.request.CreateUserRequest;
+import org.eclipse.tractusx.edc.usermanagement.request.TokenRequest;
 import org.eclipse.tractusx.edc.usermanagement.request.UpdateUserRequest;
 import org.keycloak.representations.idm.RoleRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
@@ -208,6 +210,38 @@ public class UserManagementApiController {
                         .build();
             }
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity("{\"message\":\"" + result.getFailureDetail() + "\"}")
+                    .build();
+        }
+    }
+
+    /**
+     * Generate access token using username and password (Resource Owner Password Credentials grant)
+     */
+    @POST
+    @Path("/token")
+    public Response generateToken(TokenRequest request) {
+        if (request == null || request.getUsername() == null || request.getPassword() == null) {
+            return Response.status(BAD_REQUEST)
+                    .entity("{\"message\":\"Username and password are required\"}")
+                    .build();
+        }
+
+        Result<TokenResponse> result = userService.generateToken(
+                request.getUsername(),
+                request.getPassword()
+        );
+
+        if (result.succeeded()) {
+            return Response.ok(result.getContent()).build();
+        } else {
+            Response.Status status = result.getFailureDetail().toLowerCase().contains("authentication") ||
+                    result.getFailureDetail().toLowerCase().contains("invalid") ||
+                    result.getFailureDetail().toLowerCase().contains("unauthorized")
+                    ? Response.Status.UNAUTHORIZED
+                    : BAD_REQUEST;
+            
+            return Response.status(status)
                     .entity("{\"message\":\"" + result.getFailureDetail() + "\"}")
                     .build();
         }
