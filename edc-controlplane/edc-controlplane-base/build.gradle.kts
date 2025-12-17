@@ -69,6 +69,7 @@ dependencies {
     implementation(project(":edc-extensions:gateway"))
     implementation(project(":edc-extensions:audit"))
     implementation(project(":edc-extensions:elasticsearch-monitor"))
+    implementation(project(":edc-extensions:certificate-validator"))
 
     runtimeOnly(project(":edc-extensions:event-subscriber"))
 

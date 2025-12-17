@@ -75,6 +75,7 @@ include(":edc-extensions:dynamic-trust-reloader")
 include(":edc-extensions:oauth2-hot-reload")
 include(":edc-extensions:user-management")
 include(":edc-extensions:gateway")
+include(":edc-extensions:certificate-validator")
 
 include(":edc-extensions:audit")
 include(":edc-extensions:elasticsearch-monitor")
