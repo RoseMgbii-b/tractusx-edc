@@ -1,0 +1,17 @@
+{
+  "index_patterns": ["edc-logs-*"],
+  "template": {
+    "mappings": {
+      "properties": {
+        "timestamp": { "type": "date" },
+        "level": { "type": "keyword" },
+        "message": { "type": "text" },
+        "thread": { "type": "keyword" },
+        "instanceId": { "type": "keyword" },
+        "service": { "type": "keyword" },
+        "exception": { "type": "keyword" },
+        "stacktrace": { "type": "text" }
+      }
+    }
+  }
+}

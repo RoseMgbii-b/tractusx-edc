@@ -1,0 +1,19 @@
+{
+  "index_patterns": ["audit-events-*"],
+  "template": {
+    "mappings": {
+      "properties": {
+        "id":            { "type": "keyword" },
+        "timestamp":     { "type": "date" },
+        "category":      { "type": "keyword" },
+        "event_name":    { "type": "keyword" },
+        "outcome":       { "type": "keyword" },
+        "subject_id":    { "type": "keyword" },
+        "actor_id":      { "type": "keyword" },
+        "description":   { "type": "text" },
+        "source":        { "type": "keyword" },
+        "created_at":    { "type": "date" }
+      }
+    }
+  }
+}

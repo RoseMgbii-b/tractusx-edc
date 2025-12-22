@@ -1,0 +1,43 @@
+### Create Asset
+POST http://localhost:28082/management/v3/assets
+Content-Type: application/json
+
+{
+  "asset": { "@id": "asset-123" },
+  "dataAddress": {
+    "type": "HttpData",
+    "baseUrl": "https://example.com/data"
+  }
+}
+
+### Update Asset
+PUT http://localhost:28082/management/v3/assets/asset-123
+Content-Type: application/json
+
+{
+  "asset": { "@id": "asset-123" },
+  "dataAddress": {
+    "type": "HttpData",
+    "baseUrl": "https://updated.com/new-data"
+  }
+}
+
+### Delete Asset
+DELETE http://localhost:28082/management/v3/assets/asset-123
+
+
+### Start Contract Negotiation
+POST http://localhost:28081/protocol/negotiations
+Content-Type: application/json
+
+{
+  "type": "ContractRequest",
+  "offer": {
+    "offerId": "offer1",
+    "assetId": "asset-123",
+    "policy": {}
+  },
+  "protocol": "dataspace-protocol-http",
+  "connectorAddress": "http://provider:28081/protocol",
+  "connectorId": "provider"
+}
