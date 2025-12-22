@@ -38,6 +38,7 @@ include(":spi:tokenrefresh-spi")
 include(":spi:bdrs-client-spi")
 include(":spi:dataflow-spi")
 include(":spi:audit-spi")
+include(":spi:clearing-house-spi")
 
 
 // core modules
@@ -76,6 +77,7 @@ include(":edc-extensions:oauth2-hot-reload")
 include(":edc-extensions:user-management")
 include(":edc-extensions:gateway")
 include(":edc-extensions:certificate-validator")
+include(":edc-extensions:clearing-house-client")
 
 include(":edc-extensions:audit")
 include(":edc-extensions:elasticsearch-monitor")
