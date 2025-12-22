@@ -21,9 +21,6 @@ dependencies {
 
     implementation("redis.clients:jedis:5.1.2")
 
-    // Needed for registering extensions
-    implementation(libs.edc.spi.boot)
-
     // Required for Elasticsearch HTTP client
     implementation(libs.okhttp)
     implementation(libs.edc.spi.http)
@@ -33,7 +30,6 @@ dependencies {
     testImplementation(libs.netty.mockserver)
     testImplementation(libs.edc.junit)
     testImplementation(libs.testcontainers.junit)
-    testImplementation(libs.edc.spi.http)
     testImplementation(libs.edc.junit)
 
     testImplementation(libs.edc.api.management)
