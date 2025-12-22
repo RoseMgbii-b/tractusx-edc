@@ -33,7 +33,6 @@ dependencies {
     implementation(libs.edc.spi.transactionspi)
 
 
-
     // Certificate and cryptographic libraries
     implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
     implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
