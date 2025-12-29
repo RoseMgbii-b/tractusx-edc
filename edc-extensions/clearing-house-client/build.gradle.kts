@@ -12,6 +12,7 @@ dependencies {
     implementation(project(":core:core-utils"))
     implementation(project(":spi:clearing-house-spi"))
     implementation(project(":spi:bdrs-client-spi"))
+    implementation(project(":edc-extensions:certificate-validator"))
 
     implementation(libs.edc.spi.boot)
     implementation(libs.edc.spi.core)

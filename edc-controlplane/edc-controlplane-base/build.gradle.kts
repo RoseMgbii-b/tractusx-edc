@@ -70,6 +70,7 @@ dependencies {
     implementation(project(":edc-extensions:audit"))
     implementation(project(":edc-extensions:elasticsearch-monitor"))
     implementation(project(":edc-extensions:certificate-validator"))
+    implementation(project(":edc-extensions:clearing-house-client"))
 
     runtimeOnly(project(":edc-extensions:event-subscriber"))
 

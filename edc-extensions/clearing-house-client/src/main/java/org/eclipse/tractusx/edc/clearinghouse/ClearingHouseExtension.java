@@ -16,6 +16,9 @@ import org.eclipse.edc.spi.monitor.Monitor;
 import org.eclipse.edc.spi.security.Vault;
 import org.eclipse.edc.spi.system.ServiceExtension;
 import org.eclipse.edc.spi.system.ServiceExtensionContext;
+import org.eclipse.edc.web.spi.WebService;
+import org.eclipse.edc.web.spi.configuration.ApiContext;
+import org.eclipse.tractusx.edc.clearinghouse.api.ClearingHouseTestController;
 import org.eclipse.tractusx.edc.clearinghouse.client.ClearingHouseClient;
 import org.eclipse.tractusx.edc.clearinghouse.config.ClearingHouseConfig;
 import org.eclipse.tractusx.edc.clearinghouse.mapper.ClearingHouseEventMapper;
@@ -49,7 +52,8 @@ public class ClearingHouseExtension implements ServiceExtension {
     @Inject private ContractAgreementService contractAgreementService;
     @Inject private TransferProcessService transferProcessService;
     @Inject private Vault vault;
-    @Inject private CertificateValidator certificateValidator;
+    @Inject(required = false) private CertificateValidator certificateValidator;
+    @Inject(required = false) private WebService webService;
 
     private ExecutorService executor;
     private ClearingHouseClient client;
@@ -59,67 +63,173 @@ public class ClearingHouseExtension implements ServiceExtension {
     private boolean receiptVerificationEnabled;
     private boolean trustAnchorEnabled;
 
+    public ClearingHouseExtension() {
+        // Constructor - class is being instantiated
+        System.out.println("[ClearingHouseExtension] Constructor called - extension class loaded");
+    }
+
+    @Override
+    public String name() {
+        return "Clearing House Extension";
+    }
+
     @Override
     public void initialize(ServiceExtensionContext context) {
-        eventLoggingEnabled = context.getSetting(CH_EVENT_LOGGING_ENABLED, true);
-        receiptVerificationEnabled = context.getSetting(CH_RECEIPT_VERIFICATION_ENABLED, true);
-        trustAnchorEnabled = context.getSetting(CH_TRUST_ANCHOR_ENABLED, false);
+        try {
+            // Use System.out as fallback in case Monitor is not injected
+            System.out.println("[ClearingHouseExtension] initialize() method called");
+            
+            if (monitor != null) {
+                monitor.info("=== Clearing House Extension Starting ===");
+                monitor.info("[ClearingHouseExtension] Initializing Clearing House Client Extension...");
+            } else {
+                System.out.println("[ClearingHouseExtension] WARNING: Monitor is null!");
+            }
+            
+            eventLoggingEnabled = context.getSetting(CH_EVENT_LOGGING_ENABLED, true);
+            receiptVerificationEnabled = context.getSetting(CH_RECEIPT_VERIFICATION_ENABLED, true);
+            trustAnchorEnabled = context.getSetting(CH_TRUST_ANCHOR_ENABLED, false);
+            
+            if (monitor != null) {
+                monitor.info("[ClearingHouseExtension] Settings loaded - logging: " + eventLoggingEnabled + 
+                        ", verify: " + receiptVerificationEnabled + ", trustAnchor: " + trustAnchorEnabled);
+            } else {
+                System.out.println("[ClearingHouseExtension] Settings loaded - logging: " + eventLoggingEnabled);
+            }
 
         var baseUrl = context.getSetting(CH_BASE_URL, null);
         var apiKeyAlias = context.getSetting(CH_API_KEY_ALIAS, null);
 
-        if (baseUrl == null || apiKeyAlias == null) {
-            monitor.warning("[ClearingHouseExtension] Missing required settings; extension disabled.");
-            return;
+        // Log configuration status
+        if (monitor != null) {
+            monitor.info("[ClearingHouseExtension] Configuration check - baseUrl: " + 
+                    (baseUrl != null ? "configured" : "NOT SET") + 
+                    ", apiKeyAlias: " + (apiKeyAlias != null ? apiKeyAlias : "NOT SET"));
         }
 
-        var apiKey = vault.resolveSecret(apiKeyAlias);
-        if (apiKey == null || apiKey.isBlank()) {
-            monitor.severe("[ClearingHouseExtension] Vault secret not found or empty for alias: " + apiKeyAlias);
-            return;
-        }
+        // Initialize client if configuration is available
+        if (baseUrl != null && !baseUrl.isBlank() && apiKeyAlias != null && !apiKeyAlias.isBlank()) {
+            var apiKey = vault.resolveSecret(apiKeyAlias);
+            if (apiKey != null && !apiKey.isBlank()) {
+                executor = Executors.newFixedThreadPool(4);
 
-        executor = Executors.newFixedThreadPool(4);
+                var config = ClearingHouseConfig.Builder.newInstance()
+                        .baseUrl(baseUrl.trim())
+                        .apiKey(apiKey)
+                        .connectTimeoutSeconds(10)
+                        .readTimeoutSeconds(30)
+                        .build();
 
-        var config = ClearingHouseConfig.Builder.newInstance()
-                .baseUrl(baseUrl)
-                .apiKey(apiKey)
-                .connectTimeoutSeconds(10)
-                .readTimeoutSeconds(30)
-                .build();
+                client = new ClearingHouseClient(httpClient, config, new ObjectMapper(), monitor, executor);
+                mapper = new ClearingHouseEventMapper(monitor, contractAgreementService, transferProcessService);
 
-        client = new ClearingHouseClient(httpClient, config, new ObjectMapper(), monitor, executor);
-        mapper = new ClearingHouseEventMapper(monitor, contractAgreementService, transferProcessService);
+                if (eventLoggingEnabled) {
+                    registerEventHandlers();
+                }
 
-        if (eventLoggingEnabled) {
-            registerEventHandlers();
-        }
+                if (trustAnchorEnabled) {
+                    client.fetchTrustAnchor()
+                            .thenAccept(result -> {
+                                if (result.succeeded()) {
+                                    var cert = result.getContent();
 
-        if (trustAnchorEnabled) {
-            client.fetchTrustAnchor()
-                    .thenAccept(result -> {
-                        if (result.succeeded()) {
-                            var cert = result.getContent();
-
-                            if (certificateValidator != null) {
-                                var validation = certificateValidator.validateClearingHouseCertificate(cert);
-                                if (validation.failed()) {
-                                    monitor.warning("[ClearingHouseExtension] Trust anchor cert validation failed: " +
-                                            validation.getFailureDetail());
-                                    return;
+                                    if (certificateValidator != null) {
+                                        var validation = certificateValidator.validateClearingHouseCertificate(cert);
+                                        if (validation.failed()) {
+                                            monitor.warning("[ClearingHouseExtension] Trust anchor cert validation failed: " +
+                                                    validation.getFailureDetail());
+                                            return;
+                                        }
+                                    }
+                                    monitor.info("[ClearingHouseExtension] Trust anchor subject: " + cert.getSubjectX500Principal());
+                                } else {
+                                    monitor.warning("[ClearingHouseExtension] Trust anchor fetch failed: " +
+                                            result.getFailureDetail());
                                 }
-                            }
-                            monitor.info("[ClearingHouseExtension] Trust anchor subject: " + cert.getSubjectX500Principal());
-                        } else {
-                            monitor.warning("[ClearingHouseExtension] Trust anchor fetch failed: " +
-                                    result.getFailureDetail());
-                        }
-                    });
+                            });
+                }
+
+                if (monitor != null) {
+                    monitor.info("[ClearingHouseExtension] ✓ CHN client initialized with base URL: " + baseUrl);
+                }
+            } else {
+                if (monitor != null) {
+                    monitor.warning("[ClearingHouseExtension] ✗ Vault secret not found or empty for alias: " + apiKeyAlias);
+                    monitor.warning("[ClearingHouseExtension] Please ensure the API key is stored in vault with alias: " + apiKeyAlias);
+                }
+            }
+        } else {
+            if (monitor != null) {
+                monitor.warning("[ClearingHouseExtension] ✗ CHN configuration missing:");
+                if (baseUrl == null || baseUrl.isBlank()) {
+                    monitor.warning("[ClearingHouseExtension]   - Missing: edc.clearinghouse.base.url");
+                }
+                if (apiKeyAlias == null || apiKeyAlias.isBlank()) {
+                    monitor.warning("[ClearingHouseExtension]   - Missing: edc.clearinghouse.api.key.alias");
+                }
+                monitor.warning("[ClearingHouseExtension] API endpoints will be available but CHN operations will fail.");
+            }
         }
 
-        monitor.info("[ClearingHouseExtension] Initialized. logging=" + eventLoggingEnabled +
-                ", verify=" + receiptVerificationEnabled +
-                ", trustAnchor=" + trustAnchorEnabled);
+        // Register API endpoint (always register, even if CHN is not configured)
+        // This allows testing and provides better error messages
+        if (monitor != null) {
+            monitor.info("[ClearingHouseExtension] Checking WebService availability...");
+        }
+        if (webService != null) {
+            if (monitor != null) {
+                monitor.info("[ClearingHouseExtension] WebService is available");
+            }
+            // Only register if we have a real client, or allow controller to handle null client
+            if (client == null) {
+                if (monitor != null) {
+                    monitor.warning("[ClearingHouseExtension] ⚠ Registering API endpoint without CHN client. " +
+                            "Configure edc.clearinghouse.base.url and edc.clearinghouse.api.key.alias to enable CHN operations.");
+                }
+            }
+            try {
+                if (monitor != null) {
+                    monitor.info("[ClearingHouseExtension] Registering Clearing House API endpoint...");
+                }
+                // Controller can handle null client gracefully
+                ClearingHouseTestController apiController = new ClearingHouseTestController(client, monitor);
+                webService.registerResource(ApiContext.MANAGEMENT, apiController);
+                if (monitor != null) {
+                    monitor.info("[ClearingHouseExtension] ✓ Clearing House API endpoint successfully registered at: /api/management/v3/clearinghouse");
+                    if (client == null) {
+                        monitor.warning("[ClearingHouseExtension] ⚠ Endpoint registered but CHN client is not configured. " +
+                                "Set edc.clearinghouse.base.url and edc.clearinghouse.api.key.alias to enable CHN operations.");
+                    }
+                }
+            } catch (Exception e) {
+                if (monitor != null) {
+                    monitor.severe("[ClearingHouseExtension] ✗ Failed to register API endpoint: " + e.getMessage(), e);
+                }
+            }
+        } else {
+            monitor.warning("[ClearingHouseExtension] ✗ WebService not available, API endpoint not registered. " +
+                    "Ensure WebService extension is loaded.");
+        }
+
+            if (monitor != null) {
+                monitor.info("[ClearingHouseExtension] Initialization complete. logging=" + eventLoggingEnabled +
+                        ", verify=" + receiptVerificationEnabled +
+                        ", trustAnchor=" + trustAnchorEnabled +
+                        ", client=" + (client != null ? "configured" : "not configured"));
+                monitor.info("=== Clearing House Extension Started ===");
+            } else {
+                System.out.println("[ClearingHouseExtension] Initialization complete");
+            }
+        } catch (Exception e) {
+            String errorMsg = "[ClearingHouseExtension] FATAL ERROR during initialization: " + e.getMessage();
+            if (monitor != null) {
+                monitor.severe(errorMsg, e);
+            } else {
+                System.err.println(errorMsg);
+                e.printStackTrace();
+            }
+            throw new RuntimeException("Clearing House Extension initialization failed", e);
+        }
     }
 
     private void registerEventHandlers() {

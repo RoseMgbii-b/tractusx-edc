@@ -36,6 +36,8 @@ public class ClearingHouseClient {
     private static final String RECEIPTS_VERIFY_PATH = "/api/v1/receipts/verify";
     private static final String PARTICIPANTS_VALIDATE_PATH = "/api/v1/participants/validate";
     private static final String TRUST_ANCHOR_PATH = "/api/v1/trust-anchor/certificate";
+    private static final String PARTICIPANT_CERTIFICATE_PATH = "/api/v1/participants/{bpn}/certificate";
+    private static final String ISSUE_COMPLIANCE_CERTIFICATE_PATH = "/api/v1/participants/{bpn}/certificates/issue";
 
 
     private final EdcHttpClient httpClient;
@@ -70,6 +72,21 @@ public class ClearingHouseClient {
 
     public CompletionStage<Result<X509Certificate>> fetchTrustAnchor() {
         return CompletableFuture.supplyAsync(this::doFetchTrustAnchor, executor);
+    }
+
+    /**
+     * Request/Issue a compliance certificate for a participant (BPN/DID)
+     * This is the main integration point - CHN issues compliance certificates based on DID
+     */
+    public CompletionStage<Result<X509Certificate>> issueComplianceCertificate(String bpn, String did) {
+        return CompletableFuture.supplyAsync(() -> doIssueComplianceCertificate(bpn, did), executor);
+    }
+
+    /**
+     * Fetch an existing compliance certificate for a participant
+     */
+    public CompletionStage<Result<X509Certificate>> fetchParticipantCertificate(String bpn) {
+        return CompletableFuture.supplyAsync(() -> doFetchParticipantCertificate(bpn), executor);
     }
 
     private Result<LogReceipt> doLogEvent(TransactionEvent event) {
@@ -188,6 +205,93 @@ public class ClearingHouseClient {
         }  catch (IOException | CertificateException | IllegalArgumentException e) {
             monitor.severe("[ClearingHouseClient] fetchTrustAnchor failed: " + e.getMessage(), e);
             return failure("fetchTrustAnchor failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Issue a compliance certificate for a participant
+     * CHN validates the DID and issues a compliance certificate
+     */
+    private Result<X509Certificate> doIssueComplianceCertificate(String bpn, String did) {
+        if (bpn == null || bpn.isBlank()) return failure("bpn is blank");
+        if (did == null || did.isBlank()) return failure("did is required for certificate issuance");
+
+        var url = config.getBaseUrl() + ISSUE_COMPLIANCE_CERTIFICATE_PATH.replace("{bpn}", bpn);
+
+        try {
+            var payload = new HashMap<String, Object>();
+            payload.put("bpn", bpn);
+            payload.put("did", did);
+
+            var bodyJson = mapper.writeValueAsString(payload);
+            var req = new Request.Builder()
+                    .url(url)
+                    .post(RequestBody.create(bodyJson, JSON))
+                    .header("Authorization", "Bearer " + config.getApiKey())
+                    .build();
+
+            try (Response response = httpClient.execute(req)) {
+                if (!response.isSuccessful()) {
+                    return failure("CHN issueComplianceCertificate failed: HTTP " + response.code());
+                }
+                if (response.body() == null) {
+                    return failure("CHN compliance certificate response body is empty");
+                }
+
+                var pem = response.body().string();
+                var cleaned = pem.replace("-----BEGIN CERTIFICATE-----", "")
+                        .replace("-----END CERTIFICATE-----", "")
+                        .replaceAll("\\s+", "");
+
+                var decoded = Base64.getDecoder().decode(cleaned);
+                var cf = CertificateFactory.getInstance("X.509");
+                var cert = (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(decoded));
+
+                monitor.info("[ClearingHouseClient] Compliance certificate issued for BPN: " + bpn + ", DID: " + did);
+                return success(cert);
+            }
+        } catch (Exception e) {
+            monitor.severe("[ClearingHouseClient] issueComplianceCertificate failed: " + e.getMessage(), e);
+            return failure("issueComplianceCertificate failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Fetch an existing compliance certificate for a participant
+     */
+    private Result<X509Certificate> doFetchParticipantCertificate(String bpn) {
+        if (bpn == null || bpn.isBlank()) return failure("bpn is blank");
+
+        var url = config.getBaseUrl() + PARTICIPANT_CERTIFICATE_PATH.replace("{bpn}", bpn);
+
+        var request = new Request.Builder()
+                .url(url)
+                .get()
+                .header("Authorization", "Bearer " + config.getApiKey())
+                .build();
+
+        try (Response response = httpClient.execute(request)) {
+            if (!response.isSuccessful()) {
+                return failure("CHN fetchParticipantCertificate failed: HTTP " + response.code());
+            }
+            if (response.body() == null) {
+                return failure("CHN participant certificate response body is empty");
+            }
+
+            var pem = response.body().string();
+            var cleaned = pem.replace("-----BEGIN CERTIFICATE-----", "")
+                    .replace("-----END CERTIFICATE-----", "")
+                    .replaceAll("\\s+", "");
+
+            var decoded = Base64.getDecoder().decode(cleaned);
+            var cf = CertificateFactory.getInstance("X.509");
+            var cert = (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(decoded));
+
+            monitor.info("[ClearingHouseClient] Participant certificate fetched for BPN: " + bpn);
+            return success(cert);
+        } catch (IOException | CertificateException | IllegalArgumentException e) {
+            monitor.severe("[ClearingHouseClient] fetchParticipantCertificate failed: " + e.getMessage(), e);
+            return failure("fetchParticipantCertificate failed: " + e.getMessage());
         }
     }
 
