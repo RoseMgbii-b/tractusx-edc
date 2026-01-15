@@ -360,7 +360,25 @@ public class GaiaXRegistryComplianceClient {
 
             try (Response response = httpClient.execute(req)) {
                 if (!response.isSuccessful()) {
-                    return failure("Registry verifyTrustAnchorChainFromUri failed: HTTP " + response.code());
+                    // Read error response body to get detailed error message
+                    String errorMessage = "HTTP " + response.code();
+                    if (response.body() != null) {
+                        try {
+                            var errorJson = response.body().string();
+                            var errorTree = mapper.readTree(errorJson);
+                            if (errorTree.has("message")) {
+                                errorMessage = errorTree.get("message").asText();
+                            } else if (errorTree.has("error")) {
+                                errorMessage = errorTree.get("error").asText();
+                            } else {
+                                errorMessage = errorJson; // Use full JSON if no specific field
+                            }
+                        } catch (Exception e) {
+                            // If we can't parse the error body, just use the code
+                            monitor.debug("[GaiaXRegistryComplianceClient] Could not parse error response body: " + e.getMessage());
+                        }
+                    }
+                    return failure("Registry verifyTrustAnchorChainFromUri failed: " + errorMessage);
                 }
                 if (response.body() == null) {
                     return success(false);

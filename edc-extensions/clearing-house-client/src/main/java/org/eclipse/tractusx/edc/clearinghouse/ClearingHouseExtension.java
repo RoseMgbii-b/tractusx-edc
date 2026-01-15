@@ -33,6 +33,9 @@ public class ClearingHouseExtension implements ServiceExtension {
     @Setting(value = "Gaia-X Compliance base URL", required = false)
     public static final String GX_COMPLIANCE_BASE_URL = "edc.gaiax.compliance.base.url";
 
+    @Setting(value = "Path to X.509 certificate chain PEM file (for did:web certificate chain endpoint)", required = false, defaultValue = "x509CertificateChain.pem")
+    public static final String CERTIFICATE_CHAIN_PATH = "edc.clearinghouse.certificate.chain.path";
+
     @Inject private Monitor monitor;
     @Inject private EdcHttpClient httpClient;
     @Inject private EventRouter eventRouter;
@@ -109,9 +112,11 @@ public class ClearingHouseExtension implements ServiceExtension {
         // Register API endpoint
         if (webService != null) {
             try {
-                ClearingHouseTestController apiController = new ClearingHouseTestController(gxClient, monitor);
+                var certificateChainPath = context.getSetting(CERTIFICATE_CHAIN_PATH, "x509CertificateChain.pem");
+                ClearingHouseTestController apiController = new ClearingHouseTestController(gxClient, monitor, certificateChainPath);
                 webService.registerResource(ApiContext.MANAGEMENT, apiController);
                 monitor.info("[ClearingHouseExtension] ✓ API endpoint registered at: /api/management/v3/clearinghouse");
+                monitor.info("[ClearingHouseExtension] Certificate chain path configured: " + certificateChainPath);
             } catch (Exception e) {
                 monitor.severe("[ClearingHouseExtension] ✗ Failed to register API endpoint: " + e.getMessage(), e);
             }
