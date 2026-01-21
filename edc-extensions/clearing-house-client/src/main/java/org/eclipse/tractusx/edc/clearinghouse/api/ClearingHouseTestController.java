@@ -39,6 +39,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.nio.file.Files;
 
 import static jakarta.ws.rs.core.Response.Status.BAD_REQUEST;
 import static jakarta.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
@@ -59,6 +60,7 @@ public class ClearingHouseTestController {
 
     private final GaiaXRegistryComplianceClient gxClient;
     private final Monitor monitor;
+    private final String certificateChainPath;
 
     /**
      * Controller for testing Gaia-X Registry and Compliance APIs.
@@ -70,9 +72,12 @@ public class ClearingHouseTestController {
      * The old CHN client (ClearingHouseClient) with paths like /api/v1/events/log, 
      * /api/v1/participants/validate are NOT used - those paths are not valid.
      */
-    public ClearingHouseTestController(GaiaXRegistryComplianceClient gxClient, Monitor monitor) {
+    public ClearingHouseTestController(GaiaXRegistryComplianceClient gxClient, Monitor monitor, String certificateChainPath) {
         this.gxClient = gxClient;
         this.monitor = monitor;
+        this.certificateChainPath = certificateChainPath != null && !certificateChainPath.isBlank() 
+                ? certificateChainPath 
+                : "x509CertificateChain.pem"; // Default to working directory
         if (monitor != null) {
             if (gxClient == null) {
                 monitor.warning("[ClearingHouseTestController] Controller initialized without Gaia-X client. " +
@@ -81,6 +86,127 @@ public class ClearingHouseTestController {
                 monitor.info("[ClearingHouseTestController] Controller initialized with Gaia-X Registry/Compliance client");
             }
         }
+    }
+
+    /**
+     * Serve the participant's X.509 certificate chain at a well-known location.
+     * <p>
+     * Note: The file {@code x509CertificateChain.pem} must contain a valid PEM-encoded
+     * certificate chain (leaf + intermediates, no private key) that chains to a
+     * trust anchor known by the Gaia-X Registry.
+     * <p>
+     * Full external URL (assuming default management context):
+     *   https://<host>/api/management/v3/clearinghouse/.well-known/x509CertificateChain.pem
+     * <p>
+     * For use with did:web:test1.ecdc.es, map
+     *   https://test1.ecdc.es/.well-known/x509CertificateChain.pem
+     * to this endpoint via a reverse proxy.
+     */
+    @GET
+    @Path("/.well-known/x509CertificateChain.pem")
+    @Produces(MediaType.TEXT_PLAIN)
+    public Response getCertificateChain() {
+        try {
+            // Resolve the certificate chain path - try multiple locations
+            java.nio.file.Path certPath = resolveCertificateChainPath(certificateChainPath);
+            
+            if (!Files.exists(certPath)) {
+                String errorMsg = "Certificate chain file not found at: " + certPath.toAbsolutePath() + 
+                        ". Please configure edc.clearinghouse.certificate.chain.path with an absolute path.";
+                if (monitor != null) {
+                    monitor.severe("[ClearingHouseTestController] " + errorMsg);
+                }
+                return Response.status(INTERNAL_SERVER_ERROR)
+                        .entity(errorMsg)
+                        .build();
+            }
+            
+            String pem = Files.readString(certPath);
+            if (monitor != null) {
+                monitor.debug("[ClearingHouseTestController] Serving certificate chain from: " + certPath.toAbsolutePath());
+            }
+            return Response.ok(pem, MediaType.TEXT_PLAIN).build();
+        } catch (Exception e) {
+            String errorMsg = "Error loading certificate chain from " + certificateChainPath + ": " + e.getMessage();
+            if (monitor != null) {
+                monitor.severe("[ClearingHouseTestController] " + errorMsg, e);
+            }
+            return Response.status(INTERNAL_SERVER_ERROR)
+                    .entity(errorMsg + ". Configure edc.clearinghouse.certificate.chain.path with an absolute path.")
+                    .build();
+        }
+    }
+    
+    /**
+     * Resolves the certificate chain path, trying multiple locations:
+     * 1. Path as-is (works for absolute paths)
+     * 2. Relative to current working directory
+     * 3. Relative to project root (detected by walking up to find .git, settings.gradle.kts, or build.gradle.kts)
+     * 4. Relative to user home directory
+     */
+    private java.nio.file.Path resolveCertificateChainPath(String path) {
+        java.nio.file.Path certPath = java.nio.file.Path.of(path);
+        
+        // If absolute path or exists as-is, return it
+        if (certPath.isAbsolute() || Files.exists(certPath)) {
+            return certPath.toAbsolutePath();
+        }
+        
+        // Try relative to current working directory
+        java.nio.file.Path workingDirPath = java.nio.file.Path.of(System.getProperty("user.dir"), path);
+        if (Files.exists(workingDirPath)) {
+            return workingDirPath.toAbsolutePath();
+        }
+        
+        // Try relative to project root (walk up directory tree to find project markers)
+        java.nio.file.Path projectRoot = findProjectRoot();
+        if (projectRoot != null) {
+            java.nio.file.Path projectRootPath = projectRoot.resolve(path);
+            if (Files.exists(projectRootPath)) {
+                return projectRootPath.toAbsolutePath();
+            }
+        }
+        
+        // Try relative to user home
+        java.nio.file.Path homePath = java.nio.file.Path.of(System.getProperty("user.home"), path);
+        if (Files.exists(homePath)) {
+            return homePath.toAbsolutePath();
+        }
+        
+        // Return the original path (will fail with a clear error message)
+        return certPath.toAbsolutePath();
+    }
+    
+    /**
+     * Finds the project root by walking up the directory tree from the current working directory
+     * looking for project markers (.git, settings.gradle.kts, build.gradle.kts, pom.xml, etc.)
+     */
+    private java.nio.file.Path findProjectRoot() {
+        java.nio.file.Path currentDir = java.nio.file.Path.of(System.getProperty("user.dir"));
+        java.nio.file.Path root = currentDir.getRoot(); // Get filesystem root (C:\ on Windows, / on Unix)
+        
+        // Walk up the directory tree
+        while (currentDir != null && !currentDir.equals(root)) {
+            // Check for common project root markers
+            if (Files.exists(currentDir.resolve(".git")) ||
+                Files.exists(currentDir.resolve("settings.gradle.kts")) ||
+                Files.exists(currentDir.resolve("settings.gradle")) ||
+                Files.exists(currentDir.resolve("build.gradle.kts")) ||
+                Files.exists(currentDir.resolve("build.gradle")) ||
+                Files.exists(currentDir.resolve("pom.xml")) ||
+                Files.exists(currentDir.resolve(".project"))) {
+                return currentDir;
+            }
+            
+            // Move up one directory
+            java.nio.file.Path parent = currentDir.getParent();
+            if (parent == null || parent.equals(currentDir)) {
+                break; // Reached filesystem root or can't go higher
+            }
+            currentDir = parent;
+        }
+        
+        return null; // Project root not found
     }
 
 
