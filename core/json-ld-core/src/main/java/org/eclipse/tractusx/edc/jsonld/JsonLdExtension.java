@@ -57,7 +57,11 @@ public class JsonLdExtension implements ServiceExtension {
     public static final String CX_POLICY_2025_09_CONTEXT = "https://w3id.org/catenax/2025/9/policy/context.jsonld";
     public static final String TX_AUTH_CONTEXT = "https://w3id.org/tractusx/auth/v1.0.0";
 
-    private static final String PREFIX = "document" + File.separator;
+    /**
+     * Classpath resources always use forward slashes ('/') regardless of OS.
+     * Using {@link File#separator} breaks resource loading on Windows.
+     */
+    private static final String PREFIX = "document/";
     private static final Map<String, String> FILES = Map.of(
             CREDENTIALS_V_1, PREFIX + "credential-v1.jsonld",
             SECURITY_JWS_V1, PREFIX + "security-jws-2020.jsonld",
