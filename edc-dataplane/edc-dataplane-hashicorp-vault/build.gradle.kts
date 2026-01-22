@@ -41,4 +41,21 @@ tasks.withType<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar> {
 
 application {
     mainClass.set("org.eclipse.edc.boot.system.runtime.BaseRuntime")
+
+    applicationDefaultJvmArgs = listOf(
+        "-Dedc.fs.config=${project.rootDir}/configuration/config.properties",
+        "-Dedc.keystore=",
+        "-Dedc.keystore.password=",
+        // Data Plane specific ports (different from control plane to avoid conflicts)
+        // Note: Data plane does NOT need protocol port - that's only for control plane DSP
+        // These ports must be different from edc-runtime-memory which uses: 8181, 8185, 8186
+        "-Dweb.http.port=28090",
+        "-Dweb.http.path=/api",
+        "-Dweb.http.control.port=9999",
+        "-Dweb.http.control.path=/control",
+        "-Dweb.http.public.port=8187",
+        "-Dweb.http.public.path=/api/public"
+        // Protocol port intentionally NOT set - data plane doesn't need DSP protocol endpoint
+        // If extensions try to use it, they'll fail gracefully or use defaults
+    )
 }

@@ -50,7 +50,8 @@ public class RoleBasedAccessFilter implements ContainerRequestFilter {
             "v3/business-partner-groups", Set.of("ADMIN"),
             "v3/policydefinitions", Set.of("ADMIN", "POLICY_WRITER"),
             "v3/contractdefinitions", Set.of("ADMIN", "CONTRACT_WRITER"),
-            "v3/assets", Set.of("ADMIN", "ASSET_MANAGER")
+            "v3/assets", Set.of("ADMIN", "ASSET_MANAGER"),
+            "v3/catalog", Set.of("ADMIN", "CATALOG_WRITER")
     );
 
 

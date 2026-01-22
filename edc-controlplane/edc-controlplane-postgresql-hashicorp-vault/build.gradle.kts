@@ -54,4 +54,15 @@ tasks.withType<ShadowJar> {
 
 application {
     mainClass.set("org.eclipse.edc.boot.system.runtime.BaseRuntime")
+
+    applicationDefaultJvmArgs = listOf(
+        "-Dedc.fs.config=${project.rootDir}/configuration/config.properties",
+        "-Dedc.keystore=",
+        "-Dedc.keystore.password="
+        // Control plane ports are already configured in config.properties:
+        // - web.http.port=28080 (default/management API)
+        // - web.http.protocol.port=28081 (DSP protocol)
+        // - web.http.control.port=28082 (control endpoint)
+        // No data plane ports needed - this is control-plane-only
+    )
 }
