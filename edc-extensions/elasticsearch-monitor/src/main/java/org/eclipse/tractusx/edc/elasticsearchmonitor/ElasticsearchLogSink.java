@@ -92,7 +92,7 @@ public class ElasticsearchLogSink {
                         }
                     })
                     .exceptionally(error -> {
-                        monitor.warning("[ElasticsearchLogSink] Async log send failed: " + error.getMessage());
+//                        monitor.warning("[ElasticsearchLogSink] Async log send failed: " + error.getMessage());
                         return null;
                     });
 
