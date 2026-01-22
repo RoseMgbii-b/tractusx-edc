@@ -1,0 +1,11 @@
+{
+  "@context": "https://www.w3.org/ns/did/v1",
+  "id": "did:web:localhost%3A19443:dev-connector",
+  "service": [
+    {
+      "id": "#credential-service",
+      "type": "CredentialService",
+      "serviceEndpoint": "http://127.0.0.1:14000"
+    }
+  ]
+}

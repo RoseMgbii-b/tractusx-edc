@@ -1,0 +1,46 @@
+services:
+#  keycloak:
+#    image: quay.io/keycloak/keycloak:24.0
+#    command: ["start-dev", "--http-port=8080"]
+#    environment:
+#      KEYCLOAK_ADMIN: admin
+#      KEYCLOAK_ADMIN_PASSWORD: admin
+#    ports:
+#      - "8080:8080"
+
+  # Simple static file server for DID:web documents
+  did-web:
+    image: nginx:alpine
+    ports:
+      - "18080:80"
+    volumes:
+      - ./did-web:/usr/share/nginx/html:ro
+
+  didweb-https:
+    image: caddy:2
+    ports:
+      - "19443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/certs:ro
+    depends_on:
+      - did-web
+
+  credential-service:
+    image: node:20-alpine
+    working_dir: /app
+    ports:
+      - "14000:14000"
+    volumes:
+      - ./mock-credential-service:/app
+      - ./certs:/keys:ro
+    command: sh -c "npm install && node server.js"
+
+  bdrs:
+    image: node:20-alpine
+    working_dir: /app
+    command: ["sh", "-lc", "npm install && node server.js"]
+    ports:
+      - "13000:13000"
+    volumes:
+      - ./mock-bdrs:/app

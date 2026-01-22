@@ -1,0 +1,14 @@
+{
+    auto_https off
+}
+
+https://localhost:443 {
+    tls /certs/localhost.pem /certs/localhost-key.pem
+    reverse_proxy did-web:80
+
+    log {
+            output stdout
+            format console
+            level INFO
+        }
+}
