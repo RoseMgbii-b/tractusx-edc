@@ -1,0 +1,16 @@
+{
+  "@context": {
+    "@vocab": "https://w3id.org/edc/v0.0.1/ns/"
+  },
+  "@type": "ContractDefinition",
+  "@id": "test-contract-definition",
+  "accessPolicyId": "test-access-policy",
+  "contractPolicyId": "test-contract-policy",
+  "assetsSelector": {
+    "@type": "CriterionDto",
+    "operandLeft": "https://w3id.org/edc/v0.0.1/ns/id",
+    "operator": "=",
+    "operandRight": "asset-id"
+  }
+}
+

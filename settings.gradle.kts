@@ -28,6 +28,9 @@ pluginManagement {
             url = uri("https://central.sonatype.com/repository/maven-snapshots/")
         }
     }
+    plugins {
+        kotlin("jvm") version "2.2.20"
+    }
 }
 
 // spi modules
@@ -39,6 +42,7 @@ include(":spi:bdrs-client-spi")
 include(":spi:dataflow-spi")
 include(":spi:audit-spi")
 include(":spi:clearing-house-spi")
+include(":spi:service-exchange-spi")
 
 
 // core modules
@@ -78,6 +82,7 @@ include(":edc-extensions:user-management")
 include(":edc-extensions:gateway")
 include(":edc-extensions:certificate-validator")
 include(":edc-extensions:clearing-house-client")
+include("edc-extensions:service-auth")
 
 include(":edc-extensions:audit")
 include(":edc-extensions:elasticsearch-monitor")
@@ -152,6 +157,7 @@ include(":samples:testing-with-mocked-connector")
 plugins {
     id("com.gradle.develocity") version "4.2.2"
     id("com.gradle.common-custom-user-data-gradle-plugin") version "2.4.0"
+    id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0"
 }
 
 // Develocity
@@ -179,3 +185,5 @@ buildCache {
         isPush = isCI
     }
 }
+
+include("spi:service-exchange-spi")
